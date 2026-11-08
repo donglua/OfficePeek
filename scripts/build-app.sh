@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+JZ_OFFICE_ROOT="$(cd "${ROOT_DIR}/../JZOfficeAndroid" && pwd)"
+APP_BUNDLE="${ROOT_DIR}/build/OfficePeek.app"
+
+if [[ ! -d "${JZ_OFFICE_ROOT}/viewer-macos/libs/CJZOffice.xcframework" ]]; then
+    echo "==> [0/3] Building CJZOffice.xcframework in JZOfficeAndroid..."
+    "${JZ_OFFICE_ROOT}/scripts/build-macos.sh"
+fi
+
+echo "==> [1/3] Running OfficePeek unit tests..."
+cd "${ROOT_DIR}"
+CLT_TESTING_PLUGIN="/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+if [[ -f "${CLT_TESTING_PLUGIN}" ]]; then
+    swift test --enable-swift-testing --disable-xctest \
+        -Xswiftc -load-plugin-library -Xswiftc "${CLT_TESTING_PLUGIN}"
+else
+    swift test --enable-swift-testing --disable-xctest
+fi
+
+echo "==> [2/3] Building OfficePeek release executable..."
+swift build -c release
+
+echo "==> [3/3] Packaging macOS application bundle (${APP_BUNDLE})..."
+rm -rf "${APP_BUNDLE}"
+mkdir -p "${APP_BUNDLE}/Contents/MacOS" "${APP_BUNDLE}/Contents/Resources"
+cp -f "${ROOT_DIR}/.build/release/OfficePeek" "${APP_BUNDLE}/Contents/MacOS/OfficePeek"
+cp -f "${ROOT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+printf "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
+
+if command -v codesign >/dev/null 2>&1; then
+    codesign --force --deep --sign - "${APP_BUNDLE}" >/dev/null 2>&1 || true
+fi
+
+APP_SIZE="$(du -sh "${APP_BUNDLE}" | awk '{print $1}')"
+echo "==> Successfully packaged ${APP_BUNDLE} (${APP_SIZE})"
+echo "    Launch with: open \"${APP_BUNDLE}\""
