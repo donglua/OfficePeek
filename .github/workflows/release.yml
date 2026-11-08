@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  release:
+    types: [released]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.1.0 or v0.1.0)'
+        required: true
+        default: '0.1.0'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release Assets
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            ver="${INPUT_VERSION#v}"
+          elif [[ "$EVENT_NAME" == "release" ]]; then
+            ver="${RELEASE_TAG#v}"
+          else
+            ver="${REF_NAME#v}"
+          fi
+          if [[ ! "$ver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Invalid SemVer version: $ver"
+            exit 1
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=v$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Check out OfficePeek
+        uses: actions/checkout@v4
+        with:
+          path: OfficePeek
+
+      - name: Check out JZOfficeViewer SDK
+        uses: actions/checkout@v4
+        with:
+          repository: donglua/JZOfficeViewer
+          path: JZOfficeAndroid
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          rustup default 1.88.0
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build, Test, and Package OfficePeek.app
+        working-directory: OfficePeek
+        run: |
+          chmod +x scripts/build-app.sh
+          ./scripts/build-app.sh
+
+      - name: Prepare Release Archive and Checksum
+        working-directory: OfficePeek
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ASSET_NAME="OfficePeek-${VERSION}-macOS.zip"
+          cp build/OfficePeek.app.zip "$ASSET_NAME"
+          shasum -a 256 "$ASSET_NAME" > "${ASSET_NAME}.sha256"
+          echo "ASSET_NAME=$ASSET_NAME" >> "$GITHUB_ENV"
+          echo "CHECKSUM_NAME=${ASSET_NAME}.sha256" >> "$GITHUB_ENV"
+
+      - name: Attach Assets to GitHub Release
+        working-directory: OfficePeek
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" --clobber
+          else
+            gh release create "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" \
+              --title "OfficePeek $TAG" \
+              --notes "OfficePeek macOS native document viewer $TAG release."
+          fi

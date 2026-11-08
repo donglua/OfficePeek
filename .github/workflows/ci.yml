@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Build & Test macOS App
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out OfficePeek
+        uses: actions/checkout@v4
+        with:
+          path: OfficePeek
+
+      - name: Check out JZOfficeViewer SDK
+        uses: actions/checkout@v4
+        with:
+          repository: donglua/JZOfficeViewer
+          path: JZOfficeAndroid
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          rustup default 1.88.0
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build, Test, and Package OfficePeek.app
+        working-directory: OfficePeek
+        run: |
+          chmod +x scripts/build-app.sh
+          ./scripts/build-app.sh
+
+      - name: Upload OfficePeek.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OfficePeek-macos
+          path: OfficePeek/build/OfficePeek.app.zip
+          if-no-files-found: error
