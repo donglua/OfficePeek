@@ -90,4 +90,23 @@ struct OfficePeekTests {
         #expect(reloaded.records.count == 1)
         #expect(reloaded.filteredRecords.first?.id == r3.id)
     }
+
+    @Test("OfficePreviewController 全文检索状态流转与导航联动")
+    @MainActor
+    func searchStateLifecycle() {
+        let controller = OfficePreviewController()
+        #expect(!controller.isSearchPresented)
+        #expect(controller.searchResults.isEmpty)
+        #expect(!controller.isSearching)
+
+        // 呼出检索面板
+        controller.presentSearch()
+        #expect(controller.isSearchPresented)
+
+        // 关闭检索面板并清除结果
+        controller.dismissSearch()
+        #expect(!controller.isSearchPresented)
+        #expect(controller.searchResults.isEmpty)
+        #expect(controller.searchQuery.isEmpty)
+    }
 }

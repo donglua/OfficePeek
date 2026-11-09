@@ -29,6 +29,7 @@ public final class AppState: ObservableObject {
             showToast("文件不存在：\(stdURL.lastPathComponent)")
             return
         }
+        previewController.dismissSearch()
         pageThumbnailCache.reset(for: stdURL)
         activeFileURL = stdURL
         Task {
@@ -37,6 +38,7 @@ public final class AppState: ObservableObject {
     }
 
     public func closeDocument() {
+        previewController.dismissSearch()
         activeFileURL = nil
         showWarningsSheet = false
     }

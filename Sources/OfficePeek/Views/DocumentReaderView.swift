@@ -122,6 +122,24 @@ struct DocumentReaderView: View {
                 .keyboardShortcut("=", modifiers: [.command])
             }
 
+            Divider().frame(height: 18)
+
+            Button {
+                if controller.isSearchPresented {
+                    controller.dismissSearch()
+                } else {
+                    controller.presentSearch()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                    Text("查找")
+                }
+                .font(.system(size: 12, weight: controller.isSearchPresented ? .semibold : .regular))
+                .foregroundColor(controller.isSearchPresented ? .accentColor : .primary)
+            }
+            .help("全文检索 (⌘F)")
+
             if let warnings = controller.metadata?.warnings, !warnings.isEmpty {
                 Divider().frame(height: 18)
                 Button {

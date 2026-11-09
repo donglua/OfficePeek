@@ -60,6 +60,76 @@ struct OfficePeekApp: App {
                 }
                 .disabled(appState.activeFileURL == nil)
             }
+
+            CommandMenu("查找与导航") {
+                Button("在文档中查找…") {
+                    appState.previewController.presentSearch()
+                }
+                .keyboardShortcut("f", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("查找下一个") {
+                    appState.previewController.findNext()
+                }
+                .keyboardShortcut("g", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+
+                Button("查找上一个") {
+                    appState.previewController.findPrevious()
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+
+                Button("关闭查找栏") {
+                    appState.previewController.dismissSearch()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+
+                Divider()
+
+                Button("上一页 / 工作表") {
+                    appState.previewController.jumpToPage(max(1, appState.previewController.currentPage - 1))
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command])
+                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage <= 1)
+
+                Button("下一页 / 工作表") {
+                    appState.previewController.jumpToPage(min(appState.previewController.pageCount, appState.previewController.currentPage + 1))
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command])
+                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage >= appState.previewController.pageCount)
+            }
+
+            CommandMenu("视图") {
+                Button(appState.isSidebarVisible ? "隐藏侧边栏" : "显示侧边栏") {
+                    appState.isSidebarVisible.toggle()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                .disabled(appState.activeFileURL == nil)
+
+                Divider()
+
+                Button("放大") {
+                    appState.previewController.setZoom(appState.previewController.zoom + 0.25)
+                }
+                .keyboardShortcut("=", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("缩小") {
+                    appState.previewController.setZoom(appState.previewController.zoom - 0.25)
+                }
+                .keyboardShortcut("-", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+
+                Button("实际大小 (100%)") {
+                    appState.previewController.resetZoom()
+                }
+                .keyboardShortcut("0", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
+            }
+
+            TextEditingCommands()
         }
     }
 }
