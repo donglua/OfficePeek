@@ -95,7 +95,13 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" --clobber
           else
-            gh release create "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" \
-              --title "OfficePeek $TAG" \
-              --notes "OfficePeek macOS native document viewer $TAG release."
+            if [[ -f "RELEASE_NOTES.md" ]]; then
+              gh release create "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" \
+                --title "OfficePeek $TAG" \
+                --notes-file "RELEASE_NOTES.md"
+            else
+              gh release create "$TAG" "$ASSET_NAME" "$CHECKSUM_NAME" \
+                --title "OfficePeek $TAG" \
+                --generate-notes
+            fi
           fi
