@@ -5,15 +5,7 @@ import JZOffice
 
 struct OfficePeekTests {
 
-    @Test("SampleLocator 能定位内置 DOCX / PPTX / XLSX 综合样例")
-    func sampleLocatorResolvesSamples() {
-        for item in SampleLocator.sampleItems {
-            let url = SampleLocator.resolveSampleURL(named: item.fileName)
-            #expect(url != nil, "Should resolve \(item.fileName)")
-        }
-    }
-
-    @Test("RecentFilesStore 登记、持久化、置顶排序与按格式过滤")
+    @Test("RecentFilesStore 登记、持久化、置顶排序、格式过滤与缺失清理")
     @MainActor
     func recentFilesStoreLifecycle() throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -24,21 +16,50 @@ struct OfficePeekTests {
         let storageURL = tempDir.appendingPathComponent("recent.json")
         let store = RecentFilesStore(storageURL: storageURL)
 
-        guard let docxURL = SampleLocator.resolveSampleURL(named: "sample.docx"),
-              let pptxURL = SampleLocator.resolveSampleURL(named: "sample.pptx"),
-              let xlsxURL = SampleLocator.resolveSampleURL(named: "sample.xlsx") else {
-            return
-        }
+        let docxURL = tempDir.appendingPathComponent("document.docx")
+        let pptxURL = tempDir.appendingPathComponent("presentation.pptx")
+        let xlsxURL = tempDir.appendingPathComponent("spreadsheet.xlsx")
+        try "docx".write(to: docxURL, atomically: true, encoding: .utf8)
+        try "pptx".write(to: pptxURL, atomically: true, encoding: .utf8)
+        try "xlsx".write(to: xlsxURL, atomically: true, encoding: .utf8)
 
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
-        let r1 = try store.recordOpenedSync(url: docxURL, now: t0)
-        let r2 = try store.recordOpenedSync(url: pptxURL, now: t0.addingTimeInterval(10))
-        let r3 = try store.recordOpenedSync(url: xlsxURL, now: t0.addingTimeInterval(20))
+        let r1 = RecentFileRecord(
+            path: docxURL.path,
+            displayName: "document.docx",
+            format: .docx,
+            pageCount: 1,
+            sheetNames: [],
+            fileSizeBytes: 1024,
+            lastOpenedAt: t0
+        )
+        let r2 = RecentFileRecord(
+            path: pptxURL.path,
+            displayName: "presentation.pptx",
+            format: .pptx,
+            pageCount: 5,
+            sheetNames: [],
+            fileSizeBytes: 2048,
+            lastOpenedAt: t0.addingTimeInterval(10)
+        )
+        let r3 = RecentFileRecord(
+            path: xlsxURL.path,
+            displayName: "spreadsheet.xlsx",
+            format: .xlsx,
+            pageCount: 3,
+            sheetNames: ["Sheet1"],
+            fileSizeBytes: 4096,
+            lastOpenedAt: t0.addingTimeInterval(20)
+        )
+
+        store.register(record: r1)
+        store.register(record: r2)
+        store.register(record: r3)
 
         #expect(store.records.count == 3)
         #expect(store.filteredRecords.first?.id == r3.id)
 
-        // Pin r1 (sample.docx) -> should move to first in filteredRecords
+        // Pin r1 (document.docx) -> should move to first in filteredRecords
         store.togglePin(for: r1.id)
         #expect(store.filteredRecords.first?.id == r1.id)
 
@@ -49,7 +70,7 @@ struct OfficePeekTests {
         store.selectedFormatFilter = nil
 
         // Search by keyword
-        store.searchQuery = "xlsx"
+        store.searchQuery = "spreadsheet"
         #expect(store.filteredRecords.count == 1)
         #expect(store.filteredRecords.first?.id == r3.id)
         store.searchQuery = ""
@@ -59,7 +80,14 @@ struct OfficePeekTests {
         #expect(reloaded.records.count == 3)
         #expect(reloaded.filteredRecords.first?.id == r1.id)
 
+        // Test remove
         reloaded.remove(id: r2.id)
         #expect(reloaded.records.count == 2)
+
+        // Test prune missing files
+        try FileManager.default.removeItem(at: docxURL)
+        reloaded.pruneMissingFiles()
+        #expect(reloaded.records.count == 1)
+        #expect(reloaded.filteredRecords.first?.id == r3.id)
     }
 }

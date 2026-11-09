@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import JZOffice
 import OfficePeekKit
 
-/// 欢迎主页：支持文件拖拽投放、内置样例秒开、格式筛选与最近文档缩略图网格
+/// 欢迎主页：支持文件拖拽投放、格式筛选与最近文档缩略图网格
 struct WelcomeView: View {
     @ObservedObject var appState: AppState
     @ObservedObject var recentStore: RecentFilesStore
@@ -19,7 +19,7 @@ struct WelcomeView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 24) {
-                    dropZoneAndSamplesSection
+                    dropZoneSection
                     recentFilesSection
                 }
                 .padding(24)
@@ -78,75 +78,32 @@ struct WelcomeView: View {
         .padding(.vertical, 14)
     }
 
-    private var dropZoneAndSamplesSection: some View {
-        HStack(spacing: 16) {
-            Button {
-                appState.pickFileWithPanel()
-            } label: {
-                VStack(spacing: 8) {
-                    Text("📂")
-                        .font(.system(size: 28))
-                    Text("拖拽 .docx / .pptx / .xlsx 到窗口任意位置，或点击选择本地文件")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
-                    Text("离线秒开 · 零服务端依赖 · 原生 CoreGraphics 矢量渲染")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 108)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                        .foregroundColor(Color.accentColor.opacity(0.45))
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.04))
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("内置综合样例快速体验")
-                    .font(.system(size: 12, weight: .semibold))
+    private var dropZoneSection: some View {
+        Button {
+            appState.pickFileWithPanel()
+        } label: {
+            VStack(spacing: 10) {
+                Text("📂")
+                    .font(.system(size: 32))
+                Text("拖拽 .docx / .pptx / .xlsx 到此处，或点击选择本地文件")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                Text("毫秒级离线秒开 · 零服务端依赖 · 原生 CoreGraphics 矢量渲染与高保真导出")
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary)
-
-                ForEach(SampleLocator.sampleItems, id: \.fileName) { sample in
-                    Button {
-                        if let url = SampleLocator.resolveSampleURL(named: sample.fileName) {
-                            appState.openDocument(at: url)
-                        } else {
-                            appState.showToast("未找到内置样例 \(sample.fileName)")
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            FormatBadgeView(kind: sample.kind, compact: true)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(sample.title)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                Text(sample.subtitle)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Text("打开 →")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.accentColor)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
             }
-            .frame(width: 340)
+            .frame(maxWidth: .infinity, minHeight: 120)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                    .foregroundColor(Color.accentColor.opacity(0.45))
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.04))
+                    )
+            )
         }
+        .buttonStyle(.plain)
     }
 
     private var recentFilesSection: some View {
@@ -176,7 +133,7 @@ struct WelcomeView: View {
                     Text("暂无匹配的最近文档记录")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
-                    Text("点击上方「打开文件…」或右侧「内置综合样例」开始浏览，打开过的文档会自动生成封面缩略图。")
+                    Text("点击上方「打开文件…」或拖拽文档到此处开始浏览，打开过的文档会自动生成封面缩略图。")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary.opacity(0.8))
                 }

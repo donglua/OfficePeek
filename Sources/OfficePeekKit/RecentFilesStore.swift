@@ -100,6 +100,12 @@ public final class RecentFilesStore: ObservableObject {
             }
     }
 
+    /// 登记自定义记录项并持久化
+    public func register(record: RecentFileRecord) {
+        upsert(record)
+        saveToDisk()
+    }
+
     /// 同步登记打开的文档并提取元数据（便于测试与即时刷新）
     @discardableResult
     public func recordOpenedSync(url: URL, now: Date = Date()) throws -> RecentFileRecord {
