@@ -74,7 +74,13 @@ OfficePeek 是一款专为 macOS 打造的**轻量、极速、离线**的原生 
 2. 解压后将 `OfficePeek.app` 拖入 `/Applications` 应用程序文件夹；
 3. 双击即可极速启动。
 
-> *提示：macOS 初次打开未签名应用若遇 Gatekeeper 拦截，请在「系统设置」→「隐私与安全性」中点击「仍要打开」，或在终端执行 `xattr -cr /Applications/OfficePeek.app`。*
+> [!TIP]
+> **温馨提示（macOS 安全拦截处理）**：  
+> 若初次打开时提示 *“Apple无法验证‘OfficePeek’是否包含可能危害Mac安全或泄漏隐私的恶意软件”*，这是 macOS 对未公证网络下载软件的 Gatekeeper 隔离保护。只需在终端执行以下命令即可彻底解除拦截：
+> ```bash
+> xattr -cr /Applications/OfficePeek.app
+> ```
+> *(该命令用于递归移除文件的 `com.apple.quarantine` 隔离属性，执行后即可正常双击秒开)*
 
 ### 方式 2：通过源码构建
 ```bash

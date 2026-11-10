@@ -24,7 +24,23 @@
 - **矢量 PDF 与高清 PNG 导出**：
   - 一键将当前文档导出为矢量 PDF（`Cmd + E`）或将当前页导出为高清 PNG 图片。
 
-## 构建与运行
+## 下载与安装
+
+### 方式 1：直接下载预编译包（推荐）
+
+1. 前往 [GitHub Releases](https://github.com/donglua/OfficePeek/releases) 下载最新的 `OfficePeek-x.x.x-macOS.zip`（下载仅约 **870 KB**，解压后完整 `.app` 约 **2.6 MB**）；
+2. 解压后将 `OfficePeek.app` 拖入 `/Applications`（应用程序）目录；
+3. 双击直接启动。
+
+> [!TIP]
+> **温馨提示（macOS 安全拦截处理）**：  
+> 若初次打开时提示 *“Apple无法验证‘OfficePeek’是否包含可能危害Mac安全或泄漏隐私的恶意软件”*，这是 macOS Gatekeeper 对未公证网络下载文件的默认隔离保护。只需打开终端执行以下命令即可彻底解除拦截：
+> ```bash
+> xattr -cr /Applications/OfficePeek.app
+> ```
+> *(注：该命令会移除文件的 `com.apple.quarantine` 下载隔离属性，执行后即可正常双击秒开)*
+
+### 方式 2：从源码构建运行
 
 ```sh
 # 1. 运行测试并打包 build/OfficePeek.app
