@@ -2,30 +2,40 @@ import SwiftUI
 import JZOffice
 
 /// DOCX / PPTX / XLSX 彩色格式徽章
-struct FormatBadgeView: View {
-    let kind: OfficeKind
-    var compact: Bool = false
+public struct FormatBadgeView: View {
+    public let kind: OfficeKind
+    public var compact: Bool
 
-    private var badgeColor: Color {
-        switch kind {
-        case .docx:
-            return Color(red: 0.15, green: 0.39, blue: 0.92)
-        case .pptx:
-            return Color(red: 0.92, green: 0.35, blue: 0.05)
-        case .xlsx:
-            return Color(red: 0.09, green: 0.64, blue: 0.29)
-        }
+    public init(kind: OfficeKind, compact: Bool = false) {
+        self.kind = kind
+        self.compact = compact
     }
 
-    var body: some View {
+    private var cornerRadius: CGFloat {
+        compact ? 4 : 6
+    }
+
+    private var horizontalPadding: CGFloat {
+        compact ? 6 : 8
+    }
+
+    private var verticalPadding: CGFloat {
+        compact ? 2 : 3
+    }
+
+    public var body: some View {
         Text(kind.rawValue)
-            .font(.system(size: compact ? 10 : 11, weight: .bold, design: .rounded))
+            .font(ThemeTypography.captionBadge)
             .foregroundColor(.white)
-            .padding(.horizontal, compact ? 6 : 8)
-            .padding(.vertical, compact ? 2 : 3)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(badgeColor)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(ThemeColor.color(for: kind))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
             )
     }
 }
