@@ -1,0 +1,18 @@
+import SwiftUI
+
+public enum ThemeSpacing {
+    public static let xxs: CGFloat = 2
+    public static let xs: CGFloat = 4
+    public static let sm: CGFloat = 8
+    public static let md: CGFloat = 12
+    public static let lg: CGFloat = 16
+    public static let xl: CGFloat = 24
+    public static let xxl: CGFloat = 32
+}
+
+public enum ThemeRadius {
+    public static let small: CGFloat = 6
+    public static let medium: CGFloat = 10
+    public static let large: CGFloat = 14
+    public static let squircle: CGFloat = 18
+}

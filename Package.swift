@@ -1,5 +1,14 @@
 // swift-tools-version: 5.9
 import PackageDescription
+import Foundation
+
+var testSwiftSettings: [SwiftSetting] = []
+if FileManager.default.fileExists(atPath: "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib") {
+    testSwiftSettings.append(.unsafeFlags([
+        "-load-plugin-library",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+    ]))
+}
 
 let package = Package(
     name: "OfficePeek",
@@ -38,10 +47,12 @@ let package = Package(
         .testTarget(
             name: "OfficePeekTests",
             dependencies: [
+                "OfficePeek",
                 "OfficePeekKit",
                 .product(name: "JZOffice", package: "viewer-macos")
             ],
-            path: "Tests/OfficePeekTests"
+            path: "Tests/OfficePeekTests",
+            swiftSettings: testSwiftSettings
         )
     ]
 )
