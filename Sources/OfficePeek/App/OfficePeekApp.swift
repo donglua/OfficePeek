@@ -35,6 +35,7 @@ struct OfficePeekApp: App {
             RootContainerView(appState: appState)
                 .frame(minWidth: 920, minHeight: 640)
         }
+        .windowToolbarStyle(.unified(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("打开文档…") {
@@ -45,7 +46,8 @@ struct OfficePeekApp: App {
                 Button("返回欢迎主页") {
                     appState.closeDocument()
                 }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .keyboardShortcut("w", modifiers: [.command])
+                .disabled(appState.activeFileURL == nil)
 
                 Divider()
 
@@ -58,6 +60,16 @@ struct OfficePeekApp: App {
                 Button("导出当前页为高清 PNG…") {
                     appState.exportCurrentPagePNG()
                 }
+                .disabled(appState.activeFileURL == nil)
+            }
+
+            CommandGroup(after: .sidebar) {
+                Button(appState.isSidebarVisible ? "隐藏侧边栏" : "显示侧边栏") {
+                    withAnimation {
+                        appState.isSidebarVisible.toggle()
+                    }
+                }
+                .keyboardShortcut("\\", modifiers: [.command])
                 .disabled(appState.activeFileURL == nil)
             }
 
@@ -102,14 +114,6 @@ struct OfficePeekApp: App {
             }
 
             CommandMenu("视图") {
-                Button(appState.isSidebarVisible ? "隐藏侧边栏" : "显示侧边栏") {
-                    appState.isSidebarVisible.toggle()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .option])
-                .disabled(appState.activeFileURL == nil)
-
-                Divider()
-
                 Button("放大") {
                     appState.previewController.setZoom(appState.previewController.zoom + 0.25)
                 }

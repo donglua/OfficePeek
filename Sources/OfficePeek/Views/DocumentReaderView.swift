@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import JZOffice
 import OfficePeekKit
 
-/// 文档阅读器主视图（工具栏 + 可折叠侧边栏 + 主预览画布 + 底部工作表标签栏）
+/// 文档阅读器主视图（系统级工具栏 + 可折叠侧边栏 + 主预览画布 + 底部工作表标签栏）
 struct DocumentReaderView: View {
     let fileURL: URL
     @ObservedObject var appState: AppState
@@ -11,32 +11,158 @@ struct DocumentReaderView: View {
     @ObservedObject var pageThumbnailCache: PageThumbnailCache
 
     var body: some View {
-        VStack(spacing: 0) {
-            readerToolbar
-            Divider()
+        HStack(spacing: 0) {
+            if appState.isSidebarVisible {
+                DocumentSidebarView(
+                    fileURL: fileURL,
+                    controller: controller,
+                    pageThumbnailCache: pageThumbnailCache
+                )
+                Divider()
+            }
 
-            HStack(spacing: 0) {
-                if appState.isSidebarVisible {
-                    DocumentSidebarView(
-                        fileURL: fileURL,
-                        controller: controller,
-                        pageThumbnailCache: pageThumbnailCache
-                    )
-                    Divider()
-                }
+            VStack(spacing: 0) {
+                OfficePreviewView(
+                    fileURL: fileURL,
+                    controller: controller
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                VStack(spacing: 0) {
-                    OfficePreviewView(
-                        fileURL: fileURL,
-                        controller: controller
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    OfficeSheetTabs(controller: controller)
-                }
+                OfficeSheetTabs(controller: controller)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button {
+                    appState.closeDocument()
+                } label: {
+                    Label("返回主页", systemImage: "chevron.backward")
+                }
+                .help("返回欢迎主页 (⌘W)")
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        appState.isSidebarVisible.toggle()
+                    }
+                } label: {
+                    Label(appState.isSidebarVisible ? "隐藏侧栏" : "显示侧栏", systemImage: "sidebar.left")
+                }
+                .help("显示/隐藏侧边栏 (⌘\\)")
+            }
+
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    if let kind = controller.metadata?.format {
+                        FormatBadgeView(kind: kind, compact: true)
+                    }
+                    Text(fileURL.lastPathComponent)
+                        .font(ThemeTypography.windowTitle)
+                        .lineLimit(1)
+                }
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                if controller.pageCount > 1 {
+                    ControlGroup {
+                        Button {
+                            controller.jumpToPage(max(1, controller.currentPage - 1))
+                        } label: {
+                            Label("上一页", systemImage: "chevron.left")
+                        }
+                        .disabled(controller.currentPage <= 1)
+                        .help("上一页")
+
+                        Text("\(controller.currentPage) / \(controller.pageCount)")
+                            .font(ThemeTypography.monospacedValue)
+                            .frame(minWidth: 48)
+
+                        Button {
+                            controller.jumpToPage(min(controller.pageCount, controller.currentPage + 1))
+                        } label: {
+                            Label("下一页", systemImage: "chevron.right")
+                        }
+                        .disabled(controller.currentPage >= controller.pageCount)
+                        .help("下一页")
+                    }
+                }
+
+                ControlGroup {
+                    Button {
+                        controller.setZoom(controller.zoom - 0.25)
+                    } label: {
+                        Label("缩小", systemImage: "minus")
+                    }
+                    .keyboardShortcut("-", modifiers: [.command])
+                    .help("缩小 (⌘-)")
+
+                    Button {
+                        controller.resetZoom()
+                    } label: {
+                        Text("\(Int(round(controller.zoom * 100)))%")
+                            .font(ThemeTypography.monospacedValue)
+                            .frame(minWidth: 44)
+                    }
+                    .keyboardShortcut("0", modifiers: [.command])
+                    .help("恢复 100% (⌘0)")
+
+                    Button {
+                        controller.setZoom(controller.zoom + 0.25)
+                    } label: {
+                        Label("放大", systemImage: "plus")
+                    }
+                    .keyboardShortcut("=", modifiers: [.command])
+                    .help("放大 (⌘=)")
+                }
+
+                Button {
+                    if controller.isSearchPresented {
+                        controller.dismissSearch()
+                    } else {
+                        controller.presentSearch()
+                    }
+                } label: {
+                    Label("查找", systemImage: "magnifyingglass")
+                }
+                .foregroundColor(controller.isSearchPresented ? .accentColor : .primary)
+                .keyboardShortcut("f", modifiers: [.command])
+                .help("全文检索 (⌘F)")
+
+                if let warnings = controller.metadata?.warnings, !warnings.isEmpty {
+                    Button {
+                        appState.showWarningsSheet = true
+                    } label: {
+                        Label("\(warnings.count) 条提示", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                    }
+                    .help("查看文档兼容性提示")
+                }
+
+                Menu {
+                    Button("导出为矢量 PDF…") {
+                        appState.exportPDF(for: fileURL)
+                    }
+                    .keyboardShortcut("e", modifiers: [.command])
+
+                    Button("导出当前页为高清 PNG…") {
+                        appState.exportCurrentPagePNG()
+                    }
+
+                    Divider()
+
+                    Button("在 Finder 中显示") {
+                        appState.revealInFinder(fileURL)
+                    }
+
+                    Button("打开其他文档…") {
+                        appState.pickFileWithPanel()
+                    }
+                } label: {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                }
+                .help("导出或更多操作")
+            }
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             guard let provider = providers.first else { return false }
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
@@ -53,131 +179,6 @@ struct DocumentReaderView: View {
         .sheet(isPresented: $appState.showWarningsSheet) {
             warningsDialog
         }
-    }
-
-    private var readerToolbar: some View {
-        HStack(spacing: 10) {
-            Button {
-                appState.closeDocument()
-            } label: {
-                Text("← 主页")
-                    .font(.system(size: 12, weight: .medium))
-            }
-
-            Button {
-                appState.isSidebarVisible.toggle()
-            } label: {
-                Text(appState.isSidebarVisible ? "隐藏侧栏" : "显示侧栏")
-                    .font(.system(size: 12))
-            }
-
-            Divider().frame(height: 18)
-
-            if let kind = controller.metadata?.format {
-                FormatBadgeView(kind: kind, compact: true)
-            }
-
-            Text(fileURL.lastPathComponent)
-                .font(.system(size: 13, weight: .bold))
-                .lineLimit(1)
-
-            Spacer()
-
-            if controller.pageCount > 1 {
-                HStack(spacing: 4) {
-                    Button("◀") {
-                        controller.jumpToPage(max(1, controller.currentPage - 1))
-                    }
-                    .disabled(controller.currentPage <= 1)
-
-                    Text("\(controller.currentPage) / \(controller.pageCount)")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .frame(minWidth: 48)
-
-                    Button("▶") {
-                        controller.jumpToPage(min(controller.pageCount, controller.currentPage + 1))
-                    }
-                    .disabled(controller.currentPage >= controller.pageCount)
-                }
-
-                Divider().frame(height: 18)
-            }
-
-            HStack(spacing: 4) {
-                Button("−") {
-                    controller.setZoom(controller.zoom - 0.25)
-                }
-                .keyboardShortcut("-", modifiers: [.command])
-
-                Button("\(Int(round(controller.zoom * 100)))%") {
-                    controller.resetZoom()
-                }
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .frame(minWidth: 48)
-                .keyboardShortcut("0", modifiers: [.command])
-
-                Button("+") {
-                    controller.setZoom(controller.zoom + 0.25)
-                }
-                .keyboardShortcut("=", modifiers: [.command])
-            }
-
-            Divider().frame(height: 18)
-
-            Button {
-                if controller.isSearchPresented {
-                    controller.dismissSearch()
-                } else {
-                    controller.presentSearch()
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                    Text("查找")
-                }
-                .font(.system(size: 12, weight: controller.isSearchPresented ? .semibold : .regular))
-                .foregroundColor(controller.isSearchPresented ? .accentColor : .primary)
-            }
-            .help("全文检索 (⌘F)")
-
-            if let warnings = controller.metadata?.warnings, !warnings.isEmpty {
-                Divider().frame(height: 18)
-                Button {
-                    appState.showWarningsSheet = true
-                } label: {
-                    Text("⚠️ \(warnings.count) 条提示")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.orange)
-                }
-            }
-
-            Divider().frame(height: 18)
-
-            Menu("导出 / 操作") {
-                Button("导出为矢量 PDF…") {
-                    appState.exportPDF(for: fileURL)
-                }
-                .keyboardShortcut("e", modifiers: [.command])
-
-                Button("导出当前页为高清 PNG…") {
-                    appState.exportCurrentPagePNG()
-                }
-
-                Divider()
-
-                Button("在 Finder 中显示") {
-                    appState.revealInFinder(fileURL)
-                }
-
-                Button("打开其他文档…") {
-                    appState.pickFileWithPanel()
-                }
-            }
-            .frame(width: 110)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var warningsDialog: some View {
