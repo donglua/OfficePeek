@@ -36,6 +36,9 @@ rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS" "${APP_BUNDLE}/Contents/Resources"
 cp -f "${ROOT_DIR}/.build/release/OfficePeek" "${APP_BUNDLE}/Contents/MacOS/OfficePeek"
 cp -f "${ROOT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+if [[ -f "${ROOT_DIR}/Resources/AppIcon.icns" ]]; then
+    cp -f "${ROOT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
 printf "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
 if command -v codesign >/dev/null 2>&1; then
