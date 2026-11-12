@@ -14,6 +14,11 @@ struct WelcomeView: View {
         nonmutating set { _isDragTargeted.wrappedValue = newValue }
     }
 
+    init(appState: AppState, recentStore: RecentFilesStore) {
+        self.appState = appState
+        self.recentStore = recentStore
+    }
+
     private let gridColumns = [
         GridItem(.adaptive(minimum: 220, maximum: 280), spacing: 16)
     ]
