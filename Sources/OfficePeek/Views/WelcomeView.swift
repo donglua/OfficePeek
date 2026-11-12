@@ -57,7 +57,7 @@ struct WelcomeView: View {
                 HStack(alignment: .center, spacing: 8) {
                     Text("OfficePeek")
                         .font(ThemeTypography.heroTitle)
-                    Text("v0.2.0")
+                    Text("v0.3.0")
                         .font(ThemeTypography.captionBadge)
                         .foregroundColor(.accentColor)
                         .padding(.horizontal, 6)
