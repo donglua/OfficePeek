@@ -18,6 +18,10 @@ public final class AppState: ObservableObject {
     public let previewController = OfficePreviewController()
     public let pageThumbnailCache = PageThumbnailCache()
 
+    internal private(set) var searchPrewarmTask: Task<Void, Never>?
+    internal private(set) var prewarmedSearchPath: String?
+    private var prewarmingSearchPath: String?
+
     public init(recentStore: RecentFilesStore? = nil) {
         self.recentStore = recentStore ?? RecentFilesStore()
         self.recentStore.refreshThumbnails()
@@ -29,6 +33,7 @@ public final class AppState: ObservableObject {
             showToast("文件不存在：\(stdURL.lastPathComponent)")
             return
         }
+        cancelSearchPrewarm()
         previewController.dismissSearch()
         pageThumbnailCache.reset(for: stdURL)
         activeFileURL = stdURL
@@ -38,9 +43,41 @@ public final class AppState: ObservableObject {
     }
 
     public func closeDocument() {
+        cancelSearchPrewarm()
         previewController.dismissSearch()
         activeFileURL = nil
         showWarningsSheet = false
+    }
+
+    /// 打开全文检索栏并在后台按需预热当前文档的检索索引
+    public func presentSearch() {
+        previewController.presentSearch()
+        guard let path = activeFileURL?.standardizedFileURL.path,
+              prewarmedSearchPath != path,
+              prewarmingSearchPath != path else {
+            return
+        }
+        searchPrewarmTask?.cancel()
+        prewarmingSearchPath = path
+        searchPrewarmTask = Task { @MainActor [weak self] in
+            try? await NativeCore.prewarmSearchIndexAsync(at: path)
+            guard let self else { return }
+            if self.prewarmingSearchPath == path {
+                self.prewarmingSearchPath = nil
+            }
+            guard !Task.isCancelled,
+                  self.activeFileURL?.standardizedFileURL.path == path else {
+                return
+            }
+            self.prewarmedSearchPath = path
+        }
+    }
+
+    private func cancelSearchPrewarm() {
+        searchPrewarmTask?.cancel()
+        searchPrewarmTask = nil
+        prewarmingSearchPath = nil
+        prewarmedSearchPath = nil
     }
 
     public func pickFileWithPanel() {

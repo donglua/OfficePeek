@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import AppKit
 import JZOffice
+@testable import OfficePeek
 @testable import OfficePeekKit
 
 struct OfficePeekTests {
@@ -146,6 +147,36 @@ struct OfficePeekTests {
         let updatedThumb = try #require(store.thumbnails[pptxURL.standardizedFileURL.path])
         let updatedPixel = try sampleCornerRGB(of: updatedThumb)
         #expect(updatedPixel.b > 200 && updatedPixel.r < 50)
+    }
+
+    @Test("AppState.presentSearch 触发检索面板并在后台预热全文索引（含 DOCX 浮动形状文本）")
+    @MainActor
+    func presentSearchPrewarmsIndexAndCoversFloatingDocxText() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-prewarm-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docxURL = tempDir.appendingPathComponent("floating.docx")
+        try TestFixtures.writeMinimalFloatingDOCX(to: docxURL)
+
+        let store = RecentFilesStore(storageURL: tempDir.appendingPathComponent("recent.json"))
+        let appState = AppState(recentStore: store)
+        appState.openDocument(at: docxURL)
+
+        appState.presentSearch()
+        #expect(appState.previewController.isSearchPresented)
+        await appState.searchPrewarmTask?.value
+        #expect(appState.prewarmedSearchPath == docxURL.standardizedFileURL.path)
+
+        let shapeMatches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "FloatingShapeKeyword")
+        let bodyMatches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "BodyParagraphKeyword")
+        #expect(!shapeMatches.isEmpty)
+        #expect(!bodyMatches.isEmpty)
+
+        appState.closeDocument()
+        #expect(!appState.previewController.isSearchPresented)
+        #expect(appState.prewarmedSearchPath == nil)
     }
 
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {

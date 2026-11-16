@@ -119,7 +119,7 @@ struct DocumentReaderView: View {
                     if controller.isSearchPresented {
                         controller.dismissSearch()
                     } else {
-                        controller.presentSearch()
+                        appState.presentSearch()
                     }
                 } label: {
                     Label("查找", systemImage: "magnifyingglass")

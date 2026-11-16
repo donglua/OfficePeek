@@ -75,7 +75,7 @@ struct OfficePeekApp: App {
 
             CommandMenu("查找与导航") {
                 Button("在文档中查找…") {
-                    appState.previewController.presentSearch()
+                    appState.presentSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command])
                 .disabled(appState.activeFileURL == nil)
