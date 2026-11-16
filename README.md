@@ -4,19 +4,21 @@
 
 ## 核心特性
 
-- **毫秒级离线秒开**：底层由 Rust 解析 OOXML 并通过 CoreGraphics 矢量绘制，无需安装 Microsoft Office 或启动臃肿进程，完整 `.app` 包体积仅约 **2.6 MB**（压缩包仅 **~850 KB**）。
-- **全文检索与平滑导航**：
-  - 支持跨 `.docx`、`.pptx`、`.xlsx` 毫秒级全文关键词检索；
-  - 检索命中高亮绘制、命中数量即时统计、当前焦点环形遍历（`Cmd + G` / `Cmd + Shift + G`）与视口平滑自动居中定位。
+- **毫秒级离线秒开**：底层由 Rust 解析 OOXML 并通过 CoreGraphics 矢量绘制，无需安装 Microsoft Office 或启动臃肿进程，完整 `.app` 包体积保持数 MB 级别，冷启动秒开。
+- **全文检索与按需索引预热**：
+  - 支持跨 `.docx`、`.pptx`、`.xlsx` 毫秒级全文关键词检索（含 DOCX 浮动形状文本框内容）；
+  - 基于 JZOffice v0.14.0 延迟构建检索索引特性，常规打开与封面扫描零索引开销，呼出查找栏（`Cmd + F`）时后台按需预热索引；
+  - 检索命中高亮绘制（自适应浮动环绕坐标）、命中数量即时统计、当前焦点环形遍历（`Cmd + G` / `Cmd + Shift + G`）与视口平滑自动居中定位。
 - **原生文本框选与快捷复制**：
   - 原生支持鼠标自由拖拽框选、双击选词、三击整行/段落；
   - 支持 `Cmd + C` 复制纯文本至系统剪贴板、`Cmd + A` 全选。
-- **排版与复杂表格深度还原**：
+- **排版与复杂图形深度还原**：
+  - **DOCX 浮动图形与文字环绕**：支持 `<wp:anchor>` 浮动定位、四周/上下/紧密/穿越/衬于文字下方/浮于文字上方等环绕模式、Z-order 分层绘制，以及 DrawingML 形状/组合图形与形状内部文本框；
   - **表格合并单元格**：完整支持 DOCX / PPTX 表格横向与纵向跨行跨列合并（`gridSpan` 与 `vMerge`）；
   - **字体、版式与段落修饰**：支持 OOXML 主题字体（`theme1.xml`）解析、中文字体平滑回退、多级列表、段落底纹、段落边框、文本高亮、上下标、删除线、两端对齐拉伸与 Word 文档网格（`docGrid`）行间距补偿。
 - **欢迎主页与最近文档封面墙**：
   - 支持直接拖拽 `.docx` / `.pptx` / `.xlsx` 到窗口打开，或双击 Finder 文件关联打开；
-  - 自动提取文档元数据（`OfficeMetadata`）并异步渲染首页缩略图（`OfficeThumbnail`），支持按格式过滤（全部 / DOCX / PPTX / XLSX）、搜索与置顶。
+  - 通过轻量元数据速读（`OfficeMetadata.readAsync`）与首屏范围封面渲染（`OfficeThumbnail`）异步加载最近文档记录，支持按格式过滤（全部 / DOCX / PPTX / XLSX）、搜索与置顶。
 - **三格式专属导航侧边栏**：
   - **PPTX**：左侧展示全部幻灯片缩略图导航栏，点击即时定位跳转到对应幻灯片；
   - **XLSX**：左侧工作表目录与底部 `OfficeSheetTabs` 标签栏实时双向联动；
@@ -28,7 +30,7 @@
 
 ### 方式 1：直接下载预编译包（推荐）
 
-1. 前往 [GitHub Releases](https://github.com/donglua/OfficePeek/releases) 下载最新的 `OfficePeek-x.x.x-macOS.zip`（下载仅约 **870 KB**，解压后完整 `.app` 约 **2.6 MB**）；
+1. 前往 [GitHub Releases](https://github.com/donglua/OfficePeek/releases) 下载最新的 `OfficePeek-x.x.x-macOS.zip`；
 2. 解压后将 `OfficePeek.app` 拖入 `/Applications`（应用程序）目录；
 3. 双击直接启动。
 
