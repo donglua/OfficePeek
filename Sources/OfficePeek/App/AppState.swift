@@ -45,6 +45,7 @@ public final class AppState: ObservableObject {
     public func closeDocument() {
         cancelSearchPrewarm()
         previewController.dismissSearch()
+        pageThumbnailCache.clear()
         activeFileURL = nil
         showWarningsSheet = false
     }
@@ -125,7 +126,7 @@ public final class AppState: ObservableObject {
 
         Task {
             do {
-                try await OfficeExporter.exportPNGAsync(
+                try await OfficePageRenderer.exportPNGAsync(
                     from: targetURL,
                     pageNumber: page,
                     maxSize: CGSize(width: 2400, height: 2400),

@@ -179,6 +179,72 @@ struct OfficePeekTests {
         #expect(appState.prewarmedSearchPath == nil)
     }
 
+    @Test("PageThumbnailCache 与 OfficePageRenderer 准确渲染第 2 页 PPTX 缩略图与导出第 2 页 PNG/XLSX 工作表")
+    @MainActor
+    func multiPageThumbnailAndPngExportBypassFirstViewportTruncation() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-multipage-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let pptxURL = tempDir.appendingPathComponent("two_slides.pptx")
+        try TestFixtures.writeMinimalPPTX(to: pptxURL, slides: [
+            (backgroundHex: "FF0000", title: "Slide 1"),
+            (backgroundHex: "00FF00", title: "Slide 2")
+        ])
+        NativeCore.evictCache(at: pptxURL.path)
+
+        let cache = PageThumbnailCache()
+        let task1 = cache.loadPageThumbnail(from: pptxURL, pageNumber: 1)
+        let task2 = cache.loadPageThumbnail(from: pptxURL, pageNumber: 2)
+        await task1?.value
+        await task2?.value
+
+        let thumb1 = try #require(cache.pageImages[1])
+        let thumb2 = try #require(cache.pageImages[2])
+        let rgb1 = try sampleCornerRGB(of: thumb1)
+        let rgb2 = try sampleCornerRGB(of: thumb2)
+        #expect(rgb1.r > 200 && rgb1.g < 50)
+        #expect(rgb2.g > 200 && rgb2.r < 50)
+
+        // 导出第 2 页 PNG（在清空 cache 后仍应准确导出绿色第 2 页）
+        NativeCore.evictCache(at: pptxURL.path)
+        let outPPTXPNG = tempDir.appendingPathComponent("slide2.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: pptxURL,
+            pageNumber: 2,
+            maxSize: CGSize(width: 480, height: 480),
+            to: outPPTXPNG
+        )
+        let exportedSlide2 = try #require(NSImage(contentsOf: outPPTXPNG))
+        let exportedRGB = try sampleCornerRGB(of: exportedSlide2)
+        #expect(exportedRGB.g > 200 && exportedRGB.r < 50)
+
+        // 验证 XLSX 第 2 个工作表导出非空白（避免 FirstViewport 截断后续工作表单元格）
+        let xlsxURL = tempDir.appendingPathComponent("two_sheets.xlsx")
+        try TestFixtures.writeMinimalXLSX(to: xlsxURL, sheets: [
+            (name: "SheetOne", headerText: "FirstSheetTitle"),
+            (name: "SheetTwo", headerText: "SecondSheetLongTitleText")
+        ])
+        NativeCore.evictCache(at: xlsxURL.path)
+        let outXlsx1 = tempDir.appendingPathComponent("sheet1.png")
+        let outXlsx2 = tempDir.appendingPathComponent("sheet2.png")
+        try await OfficePageRenderer.exportPNGAsync(from: xlsxURL, pageNumber: 1, maxSize: CGSize(width: 600, height: 400), to: outXlsx1)
+        try await OfficePageRenderer.exportPNGAsync(from: xlsxURL, pageNumber: 2, maxSize: CGSize(width: 600, height: 400), to: outXlsx2)
+        let sheet1Data = try Data(contentsOf: outXlsx1)
+        let sheet2Data = try Data(contentsOf: outXlsx2)
+        #expect(!sheet1Data.isEmpty && !sheet2Data.isEmpty)
+        #expect(sheet1Data != sheet2Data)
+
+        // 验证含浮动形状与文字环绕的 DOCX 导出 PNG 正常生成非空图像
+        let docxURL = tempDir.appendingPathComponent("floating.docx")
+        try TestFixtures.writeMinimalFloatingDOCX(to: docxURL)
+        let outDocxPNG = tempDir.appendingPathComponent("floating-docx.png")
+        try await OfficePageRenderer.exportPNGAsync(from: docxURL, pageNumber: 1, maxSize: CGSize(width: 600, height: 800), to: outDocxPNG)
+        let exportedDocx = try #require(NSImage(contentsOf: outDocxPNG))
+        #expect(exportedDocx.size.width > 0 && exportedDocx.size.height > 0)
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])
