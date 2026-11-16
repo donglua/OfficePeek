@@ -110,12 +110,49 @@ public final class RecentFilesStore: ObservableObject {
     @discardableResult
     public func recordOpenedSync(url: URL, now: Date = Date()) throws -> RecentFileRecord {
         let stdURL = url.standardizedFileURL
-        let path = stdURL.path
         let meta = try OfficeMetadata.read(from: stdURL)
-        let attrs = try? FileManager.default.attributesOfItem(atPath: path)
-        let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        let existingPin = records.first(where: { $0.path == path })?.isPinned ?? false
+        return commitOpenedRecord(url: stdURL, meta: meta, size: Self.fileSize(atPath: stdURL.path), now: now)
+    }
 
+    /// 异步读取轻量元数据并登记打开的文档，同时生成或刷新首页缩略图
+    @discardableResult
+    public func recordOpened(url: URL, now: Date = Date()) async -> RecentFileRecord? {
+        let stdURL = url.standardizedFileURL
+        guard let meta = try? await OfficeMetadata.readAsync(from: stdURL) else { return nil }
+        let size = Self.fileSize(atPath: stdURL.path)
+        let item = commitOpenedRecord(url: stdURL, meta: meta, size: size, now: now)
+        await loadThumbnailIfNeeded(for: item, forceRefresh: true)
+        return item
+    }
+
+    /// 批量预热当前列表中所有记录的缩略图
+    public func refreshThumbnails() {
+        for item in records {
+            Task {
+                await loadThumbnailIfNeeded(for: item)
+            }
+        }
+    }
+
+    public func loadThumbnailIfNeeded(for record: RecentFileRecord, forceRefresh: Bool = false) async {
+        if !forceRefresh && thumbnails[record.id] != nil { return }
+        guard FileManager.default.fileExists(atPath: record.path) else { return }
+        if let image = try? await OfficeThumbnail.renderAsync(
+            from: record.fileURL,
+            maxSize: CGSize(width: 360, height: 260)
+        ) {
+            thumbnails[record.id] = image
+        }
+    }
+
+    private func commitOpenedRecord(
+        url stdURL: URL,
+        meta: OfficeMetadata,
+        size: Int64,
+        now: Date
+    ) -> RecentFileRecord {
+        let path = stdURL.path
+        let existingPin = records.first(where: { $0.path == path })?.isPinned ?? false
         let item = RecentFileRecord(
             path: path,
             displayName: stdURL.lastPathComponent,
@@ -131,31 +168,9 @@ public final class RecentFilesStore: ObservableObject {
         return item
     }
 
-    /// 异步登记打开的文档并生成首页缩略图
-    public func recordOpened(url: URL) async {
-        let stdURL = url.standardizedFileURL
-        guard let item = try? recordOpenedSync(url: stdURL) else { return }
-        await loadThumbnailIfNeeded(for: item)
-    }
-
-    /// 批量预热当前列表中所有记录的缩略图
-    public func refreshThumbnails() {
-        for item in records {
-            Task {
-                await loadThumbnailIfNeeded(for: item)
-            }
-        }
-    }
-
-    public func loadThumbnailIfNeeded(for record: RecentFileRecord) async {
-        if thumbnails[record.id] != nil { return }
-        guard FileManager.default.fileExists(atPath: record.path) else { return }
-        if let image = try? await OfficeThumbnail.renderAsync(
-            from: record.fileURL,
-            maxSize: CGSize(width: 360, height: 260)
-        ) {
-            thumbnails[record.id] = image
-        }
+    private static func fileSize(atPath path: String) -> Int64 {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: path)
+        return (attrs?[.size] as? NSNumber)?.int64Value ?? 0
     }
 
     public func togglePin(for id: String) {
