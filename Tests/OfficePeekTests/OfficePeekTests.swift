@@ -245,6 +245,75 @@ struct OfficePeekTests {
         #expect(exportedDocx.size.width > 0 && exportedDocx.size.height > 0)
     }
 
+    @Test("对齐 JZOffice v0.15.0：XLSX 冻结窗格解析、渲染导出与全文检索")
+    @MainActor
+    func xlsxFrozenPanesIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-frozen-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let xlsxURL = tempDir.appendingPathComponent("frozen.xlsx")
+        try TestFixtures.writeFrozenXLSX(to: xlsxURL, sheetName: "Sales", frozenRows: 1, frozenColumns: 1)
+
+        let doc = try NativeCore.parseDocument(at: xlsxURL.path)
+        let sheet = try #require(doc.sheets.first)
+        #expect(sheet.frozenRows == 1)
+        #expect(sheet.frozenColumns == 1)
+
+        let store = RecentFilesStore(storageURL: tempDir.appendingPathComponent("recent.json"))
+        let record = await store.recordOpened(url: xlsxURL)
+        #expect(record?.format == .xlsx)
+        #expect(record?.sheetNames == ["Sales"])
+        #expect(store.thumbnails[xlsxURL.standardizedFileURL.path] != nil)
+
+        let outPNG = tempDir.appendingPathComponent("frozen.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: xlsxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 800, height: 600),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+
+        let frozenMatches = try await NativeCore.searchDocumentAsync(at: xlsxURL.path, query: "FrozenCornerKey")
+        let bodyMatches = try await NativeCore.searchDocumentAsync(at: xlsxURL.path, query: "ScrollableBodyKey")
+        #expect(!frozenMatches.isEmpty)
+        #expect(!bodyMatches.isEmpty)
+    }
+
+    @Test("对齐 JZOffice v0.15.0：DOCX 行内图片水平对齐与 spAutoFit 不换行文本框")
+    func docxInlineAlignmentAndAutofitTextboxIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-docx-align-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docxURL = tempDir.appendingPathComponent("inline_autofit.docx")
+        try TestFixtures.writeInlineAlignedAndAutofitDOCX(to: docxURL)
+
+        let doc = try NativeCore.parseDocument(at: docxURL.path)
+        #expect(doc.blocks.count == 2)
+        #expect(doc.blocks[0].type == .image)
+        #expect(doc.blocks[0].horizontalAlign == 2)
+        #expect(doc.blocks[1].type == .text)
+        #expect(!doc.blocks[1].textWrap)
+
+        let outPNG = tempDir.appendingPathComponent("inline_autofit.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: docxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 600, height: 800),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+
+        let matches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "AutofitTextboxKeyword")
+        #expect(!matches.isEmpty)
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])

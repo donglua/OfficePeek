@@ -267,6 +267,168 @@ enum TestFixtures {
         try writeStoredZip(entries: entries, to: url)
     }
 
+    static func writeFrozenXLSX(
+        to url: URL,
+        sheetName: String = "FrozenSheet",
+        frozenRows: Int = 1,
+        frozenColumns: Int = 1
+    ) throws {
+        let paneXML = "<sheetViews><sheetView workbookViewId=\"0\"><pane xSplit=\"\(frozenColumns)\" ySplit=\"\(frozenRows)\" topLeftCell=\"B2\" activePane=\"bottomRight\" state=\"frozen\"/></sheetView></sheetViews>"
+        let sheetXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          \(paneXML)
+          <sheetData>
+            <row r="1">
+              <c r="A1" t="inlineStr"><is><t>FrozenCornerKey</t></is></c>
+              <c r="B1" t="inlineStr"><is><t>FrozenHeaderCol</t></is></c>
+              <c r="C1" t="inlineStr"><is><t>HeaderColC</t></is></c>
+            </row>
+            <row r="2">
+              <c r="A2" t="inlineStr"><is><t>FrozenRowLabel</t></is></c>
+              <c r="B2" t="inlineStr"><is><t>ScrollableBodyKey</t></is></c>
+              <c r="C2" t="inlineStr"><is><t>ValueC2</t></is></c>
+            </row>
+            <row r="3">
+              <c r="A3" t="inlineStr"><is><t>Row3Label</t></is></c>
+              <c r="B3" t="inlineStr"><is><t>ValueB3</t></is></c>
+              <c r="C3" t="inlineStr"><is><t>ValueC3</t></is></c>
+            </row>
+          </sheetData>
+        </worksheet>
+        """
+        let entries: [(String, Data)] = [
+            ("_rels/.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rOffice" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("[Content_Types].xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            </Types>
+            """.utf8)),
+            ("xl/workbook.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheets><sheet name="\(sheetName)" sheetId="1" r:id="rSheet1"/></sheets>
+            </workbook>
+            """.utf8)),
+            ("xl/_rels/workbook.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("xl/worksheets/sheet1.xml", Data(sheetXML.utf8))
+        ]
+        try writeStoredZip(entries: entries, to: url)
+    }
+
+    static func writeInlineAlignedAndAutofitDOCX(to url: URL) throws {
+        let pngBytes = Data([
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+            0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xd0, 0x9a, 0xdb, 0x0f,
+            0x00, 0x02, 0x4b, 0x01, 0x57, 0x49, 0x20, 0x9e, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+            0x44, 0xae, 0x42, 0x60, 0x82
+        ])
+        let entries: [(String, Data)] = [
+            ("[Content_Types].xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Default Extension="png" ContentType="image/png"/>
+              <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            </Types>
+            """.utf8)),
+            ("_rels/.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rOffice" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("word/document.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                        xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                        xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+                        xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+              <w:body>
+                <w:p>
+                  <w:pPr><w:jc w:val="center"/></w:pPr>
+                  <w:r>
+                    <w:drawing>
+                      <wp:inline distT="0" distB="0" distL="0" distR="0">
+                        <wp:extent cx="914400" cy="457200"/>
+                        <wp:docPr id="1" name="CenteredInlinePNG"/>
+                        <a:graphic>
+                          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                            <pic:pic>
+                              <pic:nvPicPr><pic:cNvPr id="0" name="pixel.png"/><pic:cNvPicPr/></pic:nvPicPr>
+                              <pic:blipFill><a:blip r:embed="rImage"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+                            </pic:pic>
+                          </a:graphicData>
+                        </a:graphic>
+                      </wp:inline>
+                    </w:drawing>
+                  </w:r>
+                </w:p>
+                <w:p>
+                  <w:r>
+                    <w:drawing>
+                      <wp:anchor behindDoc="0">
+                        <wp:positionH relativeFrom="margin"><wp:align>center</wp:align></wp:positionH>
+                        <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
+                        <wp:extent cx="1828800" cy="914400"/>
+                        <wp:wrapNone/>
+                        <a:graphic>
+                          <a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+                            <wps:wsp>
+                              <wps:cNvSpPr txBox="1"/>
+                              <wps:spPr>
+                                <a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="914400"/></a:xfrm>
+                                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                                <a:noFill/>
+                                <a:ln w="6350"><a:noFill/></a:ln>
+                              </wps:spPr>
+                              <wps:txbx>
+                                <w:txbxContent>
+                                  <w:p><w:r><w:t>AutofitTextboxKeyword</w:t></w:r></w:p>
+                                </w:txbxContent>
+                              </wps:txbx>
+                              <wps:bodyPr wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:spAutoFit/></wps:bodyPr>
+                            </wps:wsp>
+                          </a:graphicData>
+                        </a:graphic>
+                      </wp:anchor>
+                    </w:drawing>
+                  </w:r>
+                </w:p>
+                <w:sectPr><w:pgSz w="11906" h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+              </w:body>
+            </w:document>
+            """.utf8)),
+            ("word/_rels/document.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/pixel.png"/>
+            </Relationships>
+            """.utf8)),
+            ("word/media/pixel.png", pngBytes)
+        ]
+        try writeStoredZip(entries: entries, to: url)
+    }
+
     private static func writeStoredZip(entries: [(String, Data)], to url: URL) throws {
         var body = Data()
         var centralDirectory = Data()
