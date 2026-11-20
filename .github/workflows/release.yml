@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 0.5.0 or v0.5.0)'
+        description: 'Release version (e.g. 0.6.0 or v0.6.0)'
         required: true
-        default: '0.5.0'
+        default: '0.6.0'
         type: string
 
 permissions:
@@ -57,10 +57,10 @@ jobs:
         with:
           path: OfficePeek
 
-      - name: Check out JZOfficeViewer SDK
+      - name: Check out JZOfficeKit SDK
         uses: actions/checkout@v4
         with:
-          repository: donglua/JZOfficeViewer
+          repository: donglua/JZOfficeKit
           path: JZOfficeAndroid
 
       - name: Set up Rust

@@ -27,10 +27,10 @@ jobs:
         with:
           path: OfficePeek
 
-      - name: Check out JZOfficeViewer SDK
+      - name: Check out JZOfficeKit SDK
         uses: actions/checkout@v4
         with:
-          repository: donglua/JZOfficeViewer
+          repository: donglua/JZOfficeKit
           path: JZOfficeAndroid
 
       - name: Set up Rust

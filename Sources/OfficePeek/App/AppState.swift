@@ -35,6 +35,7 @@ public final class AppState: ObservableObject {
         }
         cancelSearchPrewarm()
         previewController.dismissSearch()
+        previewController.clearSelection()
         pageThumbnailCache.reset(for: stdURL)
         activeFileURL = stdURL
         Task {
@@ -45,6 +46,7 @@ public final class AppState: ObservableObject {
     public func closeDocument() {
         cancelSearchPrewarm()
         previewController.dismissSearch()
+        previewController.clearSelection()
         pageThumbnailCache.clear()
         activeFileURL = nil
         showWarningsSheet = false

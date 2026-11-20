@@ -1,6 +1,6 @@
 # OfficePeek
 
-轻量、极速、离线的 macOS 原生 Office 文档查看器（支持 `.docx`、`.pptx`、`.xlsx`），基于 [`JZOffice`](../JZOfficeAndroid/viewer-macos)（Rust `jz-office-core` + Apple `CoreGraphics` / `CoreText`）构建。
+轻量、极速、离线的 macOS 原生 Office 文档查看器（支持 `.docx`、`.pptx`、`.xlsx`），基于 [`JZOfficeKit`](https://github.com/donglua/JZOfficeKit)（Rust `jz-office-core` + Apple `CoreGraphics` / `CoreText`）构建。
 
 ## 核心特性
 
@@ -9,13 +9,14 @@
   - 支持跨 `.docx`、`.pptx`、`.xlsx` 毫秒级全文关键词检索（含 DOCX 浮动形状文本框内容）；
   - 常规打开与封面扫描零索引开销，呼出查找栏（`Cmd + F`）时后台按需预热索引；
   - 检索命中高亮绘制（自适应浮动环绕与 XLSX 冻结象限裁剪）、命中数量即时统计、当前焦点环形遍历（`Cmd + G` / `Cmd + Shift + G`）与视口平滑自动居中/冻结区避让定位。
-- **原生文本框选与快捷复制**：
-  - 原生支持鼠标自由拖拽框选、双击选词、三击整行/段落；
-  - 支持 `Cmd + C` 复制纯文本至系统剪贴板、`Cmd + A` 全选。
+- **原生文档框选与快捷复制**：
+  - **DOCX / PPTX**：原生支持鼠标自由拖拽框选、双击选词、三击整行/段落；
+  - **XLSX 单元格与区域选择复制**：支持鼠标点选与拖拽框选（含合并单元格不动点闭包吸附、跨冻结边界四象限高亮裁剪、行列标头联动高亮），输出标准 TSV（自动跳过隐藏行列、按 RFC 4180 转义）；
+  - 全格式支持 `Cmd + C` 复制至系统剪贴板、`Cmd + A` 全选与右键快捷菜单。
 - **排版与复杂图形深度还原**：
   - **XLSX 冻结窗格与表头视口锁定**：支持仅冻结行、仅冻结列与行列交叉冻结，单画布四象限裁剪绘制、跨冻结边界合并单元格、75% 视口占比保护，以及长表格滚动时外围行列标头与冻结分隔线视口锁定；
-  - **DOCX 浮动图形、行内对齐与自适应文本框**：支持 `<wp:anchor>` 浮动定位、四周/上下/紧密/穿越/衬于文字下方/浮于文字上方等环绕模式、Z-order 分层绘制、DrawingML 形状/组合图形与内部文本框、行内图片水平对齐（左/中/右）、透明不换行 `spAutoFit` 文本框宽度自适配，以及 DOCX/PPTX 窄页在视口内自动水平居中；
-  - **表格合并单元格**：完整支持 DOCX / PPTX 表格横向与纵向跨行跨列合并（`gridSpan` 与 `vMerge`）；
+  - **PPTX 图表、预设几何与连接线**：支持横向条形图（`barChart`）、饼图与环形图（`pieChart` / `doughnutChart`）、26 种高频预设几何、`prstDash` 虚线描边与连接线箭头端点（`triangle` / `stealth` / `arrow` / `diamond` / `oval`）；
+  - **DOCX 表格样式与浮动排版**：支持单元格四边独立边框、背景底纹、垂直对齐（顶部/居中/底部）、横向与纵向合并单元格（`gridSpan` 与 `vMerge`），以及 `<wp:anchor>` 浮动定位、环绕模式、Z-order 分层绘制、行内图片水平对齐（左/中/右）、透明不换行 `spAutoFit` 文本框宽度自适配与 DOCX/PPTX 窄页水平居中；
   - **字体、版式与段落修饰**：支持 OOXML 主题字体（`theme1.xml`）解析、中文字体平滑回退、多级列表、段落底纹、段落边框、文本高亮、上下标、删除线、两端对齐拉伸与 Word 文档网格（`docGrid`）行间距补偿。
 - **欢迎主页与最近文档封面墙**：
   - 支持直接拖拽 `.docx` / `.pptx` / `.xlsx` 到窗口打开，或双击 Finder 文件关联打开；

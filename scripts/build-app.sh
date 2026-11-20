@@ -4,17 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -d "${ROOT_DIR}/../JZOfficeAndroid" ]]; then
     JZ_OFFICE_ROOT="$(cd "${ROOT_DIR}/../JZOfficeAndroid" && pwd)"
+elif [[ -d "${ROOT_DIR}/../JZOfficeKit" ]]; then
+    JZ_OFFICE_ROOT="$(cd "${ROOT_DIR}/../JZOfficeKit" && pwd)"
 elif [[ -d "${ROOT_DIR}/../JZOfficeViewer" ]]; then
     JZ_OFFICE_ROOT="$(cd "${ROOT_DIR}/../JZOfficeViewer" && pwd)"
 else
-    echo "::error::JZOfficeAndroid not found at ${ROOT_DIR}/../JZOfficeAndroid or ${ROOT_DIR}/../JZOfficeViewer"
+    echo "::error::JZOfficeKit not found at ${ROOT_DIR}/../JZOfficeAndroid, ${ROOT_DIR}/../JZOfficeKit, or ${ROOT_DIR}/../JZOfficeViewer"
     exit 1
 fi
 APP_BUNDLE="${ROOT_DIR}/build/OfficePeek.app"
 APP_ZIP="${ROOT_DIR}/build/OfficePeek.app.zip"
 
 if [[ ! -d "${JZ_OFFICE_ROOT}/viewer-macos/libs/CJZOffice.xcframework" ]]; then
-    echo "==> [0/3] Building CJZOffice.xcframework in JZOfficeAndroid..."
+    echo "==> [0/3] Building CJZOffice.xcframework in JZOfficeKit..."
     "${JZ_OFFICE_ROOT}/scripts/build-macos.sh"
 fi
 

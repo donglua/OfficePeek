@@ -429,6 +429,316 @@ enum TestFixtures {
         try writeStoredZip(entries: entries, to: url)
     }
 
+    static func writeSelectableXLSX(to url: URL) throws {
+        let sheet1XML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <sheetViews>
+            <sheetView workbookViewId="0">
+              <pane xSplit="1" ySplit="1" topLeftCell="B2" activePane="bottomRight" state="frozen"/>
+            </sheetView>
+          </sheetViews>
+          <sheetData>
+            <row r="1">
+              <c r="A1" t="inlineStr"><is><t>Region</t></is></c>
+              <c r="B1" t="inlineStr"><is><t>Q1</t></is></c>
+              <c r="C1" t="inlineStr"><is><t>Q2</t></is></c>
+            </row>
+            <row r="2">
+              <c r="A2" t="inlineStr"><is><t>Merged "North"</t></is></c>
+              <c r="C2" t="inlineStr"><is><t>120</t></is></c>
+            </row>
+            <row r="3">
+              <c r="A3" t="inlineStr"><is><t>South</t></is></c>
+              <c r="B3" t="inlineStr"><is><t>80</t></is></c>
+              <c r="C3" t="inlineStr"><is><t>95</t></is></c>
+            </row>
+          </sheetData>
+          <mergeCells count="1">
+            <mergeCell ref="A2:B2"/>
+          </mergeCells>
+        </worksheet>
+        """
+        let sheet2XML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+          <sheetData>
+            <row r="1">
+              <c r="A1" t="inlineStr"><is><t>Summary</t></is></c>
+            </row>
+          </sheetData>
+        </worksheet>
+        """
+        let entries: [(String, Data)] = [
+            ("_rels/.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rOffice" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("[Content_Types].xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+              <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+              <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+            </Types>
+            """.utf8)),
+            ("xl/workbook.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <sheets>
+                <sheet name="Report" sheetId="1" r:id="rSheet1"/>
+                <sheet name="Summary" sheetId="2" r:id="rSheet2"/>
+              </sheets>
+            </workbook>
+            """.utf8)),
+            ("xl/_rels/workbook.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rSheet1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+              <Relationship Id="rSheet2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("xl/worksheets/sheet1.xml", Data(sheet1XML.utf8)),
+            ("xl/worksheets/sheet2.xml", Data(sheet2XML.utf8))
+        ]
+        try writeStoredZip(entries: entries, to: url)
+    }
+
+    static func writeStyledTableDOCX(to url: URL) throws {
+        let documentXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="12" w:color="112233"/>
+                  <w:bottom w:val="single" w:sz="12" w:color="112233"/>
+                  <w:left w:val="none"/>
+                  <w:right w:val="none"/>
+                  <w:insideH w:val="none"/>
+                  <w:insideV w:val="none"/>
+                </w:tblBorders>
+              </w:tblPr>
+              <w:tblGrid>
+                <w:gridCol w:w="3600"/>
+                <w:gridCol w:w="3600"/>
+              </w:tblGrid>
+              <w:tr>
+                <w:trPr><w:trHeight w:val="900"/></w:trPr>
+                <w:tc>
+                  <w:tcPr>
+                    <w:shd w:val="clear" w:fill="FFCC00"/>
+                    <w:vAlign w:val="top"/>
+                    <w:tcBorders>
+                      <w:top w:val="single" w:sz="16" w:color="CC0000"/>
+                      <w:bottom w:val="single" w:sz="8" w:color="445566"/>
+                    </w:tcBorders>
+                  </w:tcPr>
+                  <w:p><w:r><w:t>TopShadedCell</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc>
+                  <w:tcPr>
+                    <w:shd w:val="clear" w:fill="DAE8FC"/>
+                    <w:vAlign w:val="bottom"/>
+                    <w:tcBorders>
+                      <w:top w:val="none"/>
+                    </w:tcBorders>
+                  </w:tcPr>
+                  <w:p><w:r><w:t>BottomAlignedCell</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:sectPr><w:pgSz w:w="11906" h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+          </w:body>
+        </w:document>
+        """
+        let entries: [(String, Data)] = [
+            ("[Content_Types].xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            </Types>
+            """.utf8)),
+            ("_rels/.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rOffice" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("word/document.xml", Data(documentXML.utf8))
+        ]
+        try writeStoredZip(entries: entries, to: url)
+    }
+
+    static func writeChartsAndDashedGeometryPPTX(to url: URL) throws {
+        let slideXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+               xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <p:cSld>
+            <p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:bgPr></p:bg>
+            <p:spTree>
+              <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+              <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+              <p:sp>
+                <p:nvSpPr><p:cNvPr id="2" name="StarShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+                <p:spPr>
+                  <a:xfrm><a:off x="457200" y="457200"/><a:ext cx="1828800" cy="1828800"/></a:xfrm>
+                  <a:prstGeom prst="star5"><a:avLst/></a:prstGeom>
+                  <a:solidFill><a:srgbClr val="FFAA00"/></a:solidFill>
+                  <a:ln w="25400"><a:solidFill><a:srgbClr val="1F2933"/></a:solidFill><a:prstDash val="dash"/></a:ln>
+                </p:spPr>
+              </p:sp>
+              <p:cxnSp>
+                <p:nvCxnSpPr><p:cNvPr id="3" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+                <p:spPr>
+                  <a:xfrm><a:off x="457200" y="2743200"/><a:ext cx="2540000" cy="0"/></a:xfrm>
+                  <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+                  <a:ln w="25400">
+                    <a:solidFill><a:srgbClr val="1A73E8"/></a:solidFill>
+                    <a:prstDash val="dot"/>
+                    <a:tailEnd type="triangle" w="med" len="med"/>
+                  </a:ln>
+                </p:spPr>
+              </p:cxnSp>
+              <p:graphicFrame>
+                <p:nvGraphicFramePr><p:cNvPr id="4" name="PieChart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>
+                <p:xfrm><a:off x="3200400" y="457200"/><a:ext cx="5029200" cy="4114800"/></p:xfrm>
+                <a:graphic>
+                  <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">
+                    <c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rChart"/>
+                  </a:graphicData>
+                </a:graphic>
+              </p:graphicFrame>
+            </p:spTree>
+          </p:cSld>
+          <p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>
+        </p:sld>
+        """
+        let chartXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <c:chart>
+            <c:plotArea>
+              <c:layout/>
+              <c:pieChart>
+                <c:ser>
+                  <c:idx val="0"/><c:order val="0"/>
+                  <c:tx><c:v>Share</c:v></c:tx>
+                  <c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="E53935"/></a:solidFill></c:spPr></c:dPt>
+                  <c:cat><c:strLit><c:ptCount val="3"/><c:pt idx="0"><c:v>Alpha</c:v></c:pt><c:pt idx="1"><c:v>Beta</c:v></c:pt><c:pt idx="2"><c:v>Gamma</c:v></c:pt></c:strLit></c:cat>
+                  <c:val><c:numLit><c:ptCount val="3"/><c:pt idx="0"><c:v>40</c:v></c:pt><c:pt idx="1"><c:v>35</c:v></c:pt><c:pt idx="2"><c:v>25</c:v></c:pt></c:numLit></c:val>
+                </c:ser>
+              </c:pieChart>
+            </c:plotArea>
+            <c:legend><c:legendPos val="b"/></c:legend>
+          </c:chart>
+        </c:chartSpace>
+        """
+        let entries: [(String, Data)] = [
+            ("_rels/.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rOffice" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("[Content_Types].xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+              <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+              <Default Extension="xml" ContentType="application/xml"/>
+              <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+              <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+              <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
+              <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+              <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+              <Override PartName="/ppt/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>
+            </Types>
+            """.utf8)),
+            ("ppt/presentation.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rMaster"/></p:sldMasterIdLst>
+              <p:sldIdLst><p:sldId id="256" r:id="rSlide1"/></p:sldIdLst>
+              <p:sldSz cx="9144000" cy="5143500" type="screen16x9"/>
+            </p:presentation>
+            """.utf8)),
+            ("ppt/_rels/presentation.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+              <Relationship Id="rSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("ppt/slideLayouts/slideLayout1.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" type="blank" preserve="1">
+              <p:cSld name="Blank"><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
+            </p:sldLayout>
+            """.utf8)),
+            ("ppt/slideMasters/slideMaster1.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                         xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld>
+              <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+              <p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rLayout1"/></p:sldLayoutIdLst>
+            </p:sldMaster>
+            """.utf8)),
+            ("ppt/_rels/slideMaster1.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+              <Relationship Id="rTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("ppt/theme/theme1.xml", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
+              <a:themeElements>
+                <a:clrScheme name="Office">
+                  <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+                  <a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2>
+                  <a:accent1><a:srgbClr val="4F81BD"/></a:accent1><a:accent2><a:srgbClr val="C0504D"/></a:accent2>
+                  <a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4>
+                  <a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6>
+                  <a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink>
+                </a:clrScheme>
+                <a:fontScheme name="Office">
+                  <a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>
+                  <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>
+                </a:fontScheme>
+                <a:fmtScheme name="Office"><a:fillStyleLst/><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/></a:fmtScheme>
+              </a:themeElements>
+            </a:theme>
+            """.utf8)),
+            ("ppt/slides/slide1.xml", Data(slideXML.utf8)),
+            ("ppt/slides/_rels/slide1.xml.rels", Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+              <Relationship Id="rChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>
+            </Relationships>
+            """.utf8)),
+            ("ppt/charts/chart1.xml", Data(chartXML.utf8))
+        ]
+        try writeStoredZip(entries: entries, to: url)
+    }
+
     private static func writeStoredZip(entries: [(String, Data)], to url: URL) throws {
         var body = Data()
         var centralDirectory = Data()

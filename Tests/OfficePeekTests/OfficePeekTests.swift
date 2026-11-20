@@ -314,6 +314,113 @@ struct OfficePeekTests {
         #expect(!matches.isEmpty)
     }
 
+    @Test("对齐 JZOfficeKit v0.16.0：XLSX 单元格与区域选择、合并闭包、冻结窗格与 TSV 导出")
+    @MainActor
+    func xlsxSelectionAndTsvExportIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-xlsx-sel-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let xlsxURL = tempDir.appendingPathComponent("selectable.xlsx")
+        try TestFixtures.writeSelectableXLSX(to: xlsxURL)
+
+        let doc = try NativeCore.parseDocument(at: xlsxURL.path)
+        let sheet = try #require(doc.sheets.first)
+        #expect(doc.sheets.count == 2)
+        #expect(sheet.frozenRows == 1)
+        #expect(sheet.frozenColumns == 1)
+        #expect(sheet.merges.count == 1)
+
+        let layout = SheetSelectionModel.SheetSelectionLayout(
+            sheet: sheet,
+            headerWidth: CGElementDrawer.sheetHeaderWidth,
+            headerHeight: CGElementDrawer.sheetHeaderHeight
+        )
+
+        // 点击合并区域内的任意一格（B2 -> row 1, col 1），自动闭包扩张为 A2:B2，并视为逻辑单格输出裸文本
+        let singleMerged = try #require(SheetSelectionModel.resolve(
+            sheet: sheet,
+            anchor: SheetSelectionModel.CellCoord(row: 1, column: 1),
+            focus: SheetSelectionModel.CellCoord(row: 1, column: 1)
+        ))
+        #expect(singleMerged.startRow == 1 && singleMerged.endRow == 1)
+        #expect(singleMerged.startColumn == 0 && singleMerged.endColumn == 1)
+        #expect(SheetSelectionModel.selectedText(sheet: sheet, layout: layout, selection: singleMerged) == "Merged \"North\"")
+
+        // 全选整个工作表可见数据区，验证 TSV 结构与 RFC 4180 引号转义
+        let allSel = try #require(SheetSelectionModel.allRange(sheet: sheet, layout: layout))
+        let tsv = SheetSelectionModel.selectedText(sheet: sheet, layout: layout, selection: allSel)
+        #expect(tsv == "Region\tQ1\tQ2\n\"Merged \"\"North\"\"\"\t\t120\nSouth\t80\t95")
+
+        // 控制器未挂载画布时选区 API 安全降级，且 AppState 开闭文档清理状态不崩溃
+        let store = RecentFilesStore(storageURL: tempDir.appendingPathComponent("recent.json"))
+        let appState = AppState(recentStore: store)
+        appState.openDocument(at: xlsxURL)
+        #expect(appState.previewController.hasSelection() == false)
+        appState.closeDocument()
+        #expect(appState.previewController.getSelectedText() == "")
+    }
+
+    @Test("对齐 JZOfficeKit v0.16.0：DOCX 表格单元格边框、背景底纹与垂直对齐")
+    func docxStyledTableIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-docx-table-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docxURL = tempDir.appendingPathComponent("styled_table.docx")
+        try TestFixtures.writeStyledTableDOCX(to: docxURL)
+
+        let doc = try NativeCore.parseDocument(at: docxURL.path)
+        let table = try #require(doc.blocks.first(where: { $0.type == .table }))
+        #expect(table.cellFills == [[0xFFFFCC00, 0xFFDAE8FC]])
+        #expect(table.cellValigns == [[0, 2]])
+        #expect(table.cellBorders.count == 1 && table.cellBorders[0].count == 2)
+        // 第一个单元格上边框为红色 2pt (16/8)，第二个单元格上边框显式为 none (width == 0)
+        #expect(table.cellBorders[0][0][0].color == 0xFFCC0000)
+        #expect(table.cellBorders[0][0][0].width > 0)
+        #expect(table.cellBorders[0][1][0].width == 0)
+
+        let outPNG = tempDir.appendingPathComponent("styled_table.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: docxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 600, height: 800),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+    }
+
+    @Test("对齐 JZOfficeKit v0.16.0：PPTX 饼图、预设几何、虚线描边与连接线箭头")
+    func pptxChartsAndDashedGeometryIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-pptx-charts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let pptxURL = tempDir.appendingPathComponent("charts_geometry.pptx")
+        try TestFixtures.writeChartsAndDashedGeometryPPTX(to: pptxURL)
+
+        let doc = try NativeCore.parseDocument(at: pptxURL.path)
+        let page = try #require(doc.pages.first)
+        // 验证存在虚线描边元素（star5 / connector）、多子路径连接线箭头以及饼图路径扇区
+        #expect(page.elements.contains(where: { !$0.strokeDash.isEmpty }))
+        #expect(page.elements.contains(where: { $0.type == .path && $0.paths.count >= 2 && !$0.strokeDash.isEmpty }))
+        #expect(page.elements.contains(where: { $0.type == .path && $0.fill == 0xFFE53935 }))
+
+        let outPNG = tempDir.appendingPathComponent("charts_geometry.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: pptxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 800, height: 450),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])
