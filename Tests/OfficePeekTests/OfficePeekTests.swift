@@ -406,9 +406,17 @@ struct OfficePeekTests {
         let doc = try NativeCore.parseDocument(at: pptxURL.path)
         let page = try #require(doc.pages.first)
         // 验证存在虚线描边元素（star5 / connector）、多子路径连接线箭头以及饼图路径扇区
-        #expect(page.elements.contains(where: { !$0.strokeDash.isEmpty }))
-        #expect(page.elements.contains(where: { $0.type == .path && $0.paths.count >= 2 && !$0.strokeDash.isEmpty }))
-        #expect(page.elements.contains(where: { $0.type == .path && $0.fill == 0xFFE53935 }))
+        let hasDashedStroke = page.elements.contains { !$0.strokeDash.isEmpty }
+        let hasDashedConnectorArrow = page.elements.contains {
+            $0.type == .path && $0.paths.count >= 2 && !$0.strokeDash.isEmpty
+        }
+        let pieFillColor: UInt32 = 0xFFE53935
+        let hasPieSector = page.elements.contains {
+            $0.type == .path && $0.fill == pieFillColor
+        }
+        #expect(hasDashedStroke)
+        #expect(hasDashedConnectorArrow)
+        #expect(hasPieSector)
 
         let outPNG = tempDir.appendingPathComponent("charts_geometry.png")
         try await OfficePageRenderer.exportPNGAsync(
