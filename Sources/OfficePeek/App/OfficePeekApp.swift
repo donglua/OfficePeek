@@ -9,9 +9,7 @@ final class OfficePeekAppDelegate: NSObject, NSApplicationDelegate {
         for arg in args where !arg.hasPrefix("-") {
             let url = URL(fileURLWithPath: arg)
             if FileManager.default.fileExists(atPath: url.path) {
-                Task { @MainActor in
-                    AppState.shared.openDocument(at: url)
-                }
+                openOnMainActor(url)
                 break
             }
         }
@@ -19,8 +17,18 @@ final class OfficePeekAppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let first = urls.first else { return }
-        Task { @MainActor in
-            AppState.shared.openDocument(at: first)
+        openOnMainActor(first)
+    }
+
+    private func openOnMainActor(_ url: URL) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                AppState.shared.openDocument(at: url)
+            }
+        } else {
+            Task { @MainActor in
+                AppState.shared.openDocument(at: url)
+            }
         }
     }
 }

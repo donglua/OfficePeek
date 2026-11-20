@@ -1,5 +1,9 @@
 import Foundation
 import AppKit
+import CoreGraphics
+import CryptoKit
+import ImageIO
+import UniformTypeIdentifiers
 import JZOffice
 
 /// 最近打开的 Office 文档记录项
@@ -54,41 +58,125 @@ public struct RecentFileRecord: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-/// 最近打开文档管理器（支持 JSON 持久化、格式过滤、搜索及异步缩略图生成）
+/// 限制封面缩略图同时离屏渲染的并发数量，避免启动时抢占主预览或打满线程池
+private actor ThumbnailRenderGate {
+    private let limit: Int
+    private var activeCount: Int = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int = 3) {
+        self.limit = max(1, limit)
+    }
+
+    func withPermit<T: Sendable>(_ operation: () async throws -> T) async throws -> T {
+        await acquire()
+        defer { release() }
+        return try await operation()
+    }
+
+    private func acquire() async {
+        if activeCount < limit {
+            activeCount += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if !waiters.isEmpty {
+            let next = waiters.removeFirst()
+            next.resume()
+        } else {
+            activeCount = max(0, activeCount - 1)
+        }
+    }
+}
+
+/// 最近打开文档管理器（支持 JSON 持久化、磁盘缩略图缓存、格式过滤、搜索及并发受控异步缩略图生成）
 @MainActor
 public final class RecentFilesStore: ObservableObject {
-    @Published public private(set) var records: [RecentFileRecord] = []
+    @Published public private(set) var records: [RecentFileRecord] = [] {
+        didSet {
+            recomputeCounts()
+            recomputeFilteredRecords()
+        }
+    }
+    @Published public private(set) var filteredRecords: [RecentFileRecord] = []
+    @Published public private(set) var docxCount: Int = 0
+    @Published public private(set) var pptxCount: Int = 0
+    @Published public private(set) var xlsxCount: Int = 0
     @Published public private(set) var thumbnails: [String: NSImage] = [:]
-    @Published public var searchQuery: String = ""
-    @Published public var selectedFormatFilter: OfficeKind? = nil
+    @Published public var searchQuery: String = "" {
+        didSet {
+            recomputeFilteredRecords()
+        }
+    }
+    @Published public var selectedFormatFilter: OfficeKind? = nil {
+        didSet {
+            recomputeFilteredRecords()
+        }
+    }
 
     private let storageURL: URL
+    public let thumbnailCacheDirectory: URL
     private let maxRecords: Int
+    private let renderGate = ThumbnailRenderGate(limit: 3)
+    private var thumbnailTasks: [String: (token: UUID, task: Task<Void, Never>)] = [:]
+    private var cacheURLByRecordID: [String: URL] = [:]
 
-    public init(storageURL: URL? = nil, maxRecords: Int = 40) {
+    public init(
+        storageURL: URL? = nil,
+        thumbnailCacheDirectory: URL? = nil,
+        maxRecords: Int = 40
+    ) {
         if let storageURL {
             self.storageURL = storageURL
+            self.thumbnailCacheDirectory = thumbnailCacheDirectory
+                ?? storageURL.deletingLastPathComponent().appendingPathComponent("thumbnails", isDirectory: true)
         } else {
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory
             let dir = appSupport.appendingPathComponent("OfficePeek", isDirectory: true)
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.storageURL = dir.appendingPathComponent("recent_files.json")
+
+            let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
+            self.thumbnailCacheDirectory = thumbnailCacheDirectory
+                ?? caches.appendingPathComponent("OfficePeek/Thumbnails", isDirectory: true)
         }
         self.maxRecords = maxRecords
         loadFromDisk()
     }
 
-    public var filteredRecords: [RecentFileRecord] {
-        records
+    private func recomputeCounts() {
+        var docx = 0
+        var pptx = 0
+        var xlsx = 0
+        for record in records {
+            switch record.format {
+            case .docx: docx += 1
+            case .pptx: pptx += 1
+            case .xlsx: xlsx += 1
+            }
+        }
+        docxCount = docx
+        pptxCount = pptx
+        xlsxCount = xlsx
+    }
+
+    private func recomputeFilteredRecords() {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filter = selectedFormatFilter
+        filteredRecords = records
             .filter { record in
-                if let filter = selectedFormatFilter, record.format != filter {
+                if let filter, record.format != filter {
                     return false
                 }
-                let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !q.isEmpty {
-                    return record.displayName.localizedCaseInsensitiveContains(q)
-                        || record.path.localizedCaseInsensitiveContains(q)
+                if !query.isEmpty {
+                    return record.displayName.localizedCaseInsensitiveContains(query)
+                        || record.path.localizedCaseInsensitiveContains(query)
                 }
                 return true
             }
@@ -125,24 +213,150 @@ public final class RecentFilesStore: ObservableObject {
         return item
     }
 
-    /// 批量预热当前列表中所有记录的缩略图
+    /// 批量预热当前列表中所有记录的缩略图（受并发上限与磁盘缓存约束）
     public func refreshThumbnails() {
         for item in records {
-            Task {
-                await loadThumbnailIfNeeded(for: item)
+            Task(priority: .utility) { [weak self] in
+                await self?.loadThumbnailIfNeeded(for: item)
             }
         }
     }
 
     public func loadThumbnailIfNeeded(for record: RecentFileRecord, forceRefresh: Bool = false) async {
-        if !forceRefresh && thumbnails[record.id] != nil { return }
-        guard FileManager.default.fileExists(atPath: record.path) else { return }
-        if let image = try? await OfficeThumbnail.renderAsync(
-            from: record.fileURL,
-            maxSize: CGSize(width: 360, height: 260)
-        ) {
-            thumbnails[record.id] = image
+        if !forceRefresh && thumbnails[record.id] != nil {
+            return
         }
+        if !forceRefresh, let existing = thumbnailTasks[record.id] {
+            await existing.task.value
+            return
+        }
+        if forceRefresh, let existing = thumbnailTasks[record.id] {
+            existing.task.cancel()
+            thumbnailTasks.removeValue(forKey: record.id)
+        }
+
+        let token = UUID()
+        let recordID = record.id
+        let fileURL = record.fileURL
+        let cacheDir = thumbnailCacheDirectory
+        let gate = renderGate
+        let previousCacheURL = cacheURLByRecordID[recordID]
+
+        let task = Task { [weak self] in
+            defer {
+                if let self, self.thumbnailTasks[recordID]?.token == token {
+                    self.thumbnailTasks.removeValue(forKey: recordID)
+                }
+            }
+
+            let loaded = await Self.loadOrRenderThumbnail(
+                fileURL: fileURL,
+                cacheDirectory: cacheDir,
+                forceRefresh: forceRefresh,
+                previousCacheURL: previousCacheURL,
+                renderGate: gate
+            )
+            guard !Task.isCancelled, let self, let loaded else { return }
+
+            self.cacheURLByRecordID[recordID] = loaded.cacheURL
+            self.thumbnails[recordID] = NSImage(
+                cgImage: loaded.cgImage,
+                size: NSSize(width: loaded.cgImage.width, height: loaded.cgImage.height)
+            )
+        }
+
+        thumbnailTasks[recordID] = (token: token, task: task)
+        await task.value
+    }
+
+    private struct LoadedThumbnail: Sendable {
+        let cgImage: CGImage
+        let cacheURL: URL
+    }
+
+    private nonisolated static func loadOrRenderThumbnail(
+        fileURL: URL,
+        cacheDirectory: URL,
+        forceRefresh: Bool,
+        previousCacheURL: URL?,
+        renderGate: ThumbnailRenderGate
+    ) async -> LoadedThumbnail? {
+        await Task.detached(priority: .utility) {
+            guard !Task.isCancelled else { return nil }
+            let path = fileURL.path
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else {
+                return nil
+            }
+            let fileSize = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+            let modDate = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            let cacheURL = thumbnailCacheFileURL(
+                forPath: path,
+                fileSize: fileSize,
+                modificationTimestamp: modDate,
+                in: cacheDirectory
+            )
+
+            if !forceRefresh, let cached = readCachedCGImage(at: cacheURL) {
+                return LoadedThumbnail(cgImage: cached, cacheURL: cacheURL)
+            }
+
+            let rendered: CGImage? = try? await renderGate.withPermit {
+                guard !Task.isCancelled else { return nil }
+                return try OfficeThumbnail.renderCGImage(
+                    from: fileURL,
+                    maxSize: CGSize(width: 360, height: 260)
+                )
+            }
+            guard !Task.isCancelled, let cgImage = rendered else {
+                return nil
+            }
+
+            if let previousCacheURL, previousCacheURL != cacheURL {
+                try? FileManager.default.removeItem(at: previousCacheURL)
+            }
+            writeCachedCGImage(cgImage, to: cacheURL)
+            return LoadedThumbnail(cgImage: cgImage, cacheURL: cacheURL)
+        }.value
+    }
+
+    private nonisolated static func thumbnailCacheFileURL(
+        forPath path: String,
+        fileSize: Int64,
+        modificationTimestamp: TimeInterval,
+        in directory: URL
+    ) -> URL {
+        let mtimeNanos = Int64((modificationTimestamp * 1_000_000_000).rounded())
+        let key = "\(path)|\(fileSize)|\(mtimeNanos)"
+        let digest = SHA256.hash(data: Data(key.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent("\(hex).png")
+    }
+
+    private nonisolated static func readCachedCGImage(at url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            return nil
+        }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    private nonisolated static func writeCachedCGImage(_ image: CGImage, to url: URL) {
+        let dir = url.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let tempURL = dir.appendingPathComponent("\(url.lastPathComponent).tmp-\(UUID().uuidString)")
+        guard let dest = CGImageDestinationCreateWithURL(
+            tempURL as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return
+        }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else {
+            try? FileManager.default.removeItem(at: tempURL)
+            return
+        }
+        _ = try? FileManager.default.replaceItemAt(url, withItemAt: tempURL)
     }
 
     private func commitOpenedRecord(
@@ -180,13 +394,32 @@ public final class RecentFilesStore: ObservableObject {
     }
 
     public func remove(id: String) {
+        thumbnailTasks[id]?.task.cancel()
+        thumbnailTasks.removeValue(forKey: id)
+        if let cacheURL = cacheURLByRecordID.removeValue(forKey: id) {
+            try? FileManager.default.removeItem(at: cacheURL)
+        }
         records.removeAll { $0.id == id }
         thumbnails.removeValue(forKey: id)
         saveToDisk()
     }
 
     public func pruneMissingFiles() {
-        records.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
+        let missingIDs = Set(
+            records
+                .filter { !FileManager.default.fileExists(atPath: $0.path) }
+                .map(\.id)
+        )
+        guard !missingIDs.isEmpty else { return }
+        for id in missingIDs {
+            thumbnailTasks[id]?.task.cancel()
+            thumbnailTasks.removeValue(forKey: id)
+            thumbnails.removeValue(forKey: id)
+            if let cacheURL = cacheURLByRecordID.removeValue(forKey: id) {
+                try? FileManager.default.removeItem(at: cacheURL)
+            }
+        }
+        records.removeAll { missingIDs.contains($0.id) }
         saveToDisk()
     }
 
@@ -209,6 +442,8 @@ public final class RecentFilesStore: ObservableObject {
     }
 
     private func saveToDisk() {
+        let dir = storageURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         guard let data = try? JSONEncoder().encode(records) else { return }
         try? data.write(to: storageURL, options: .atomic)
     }

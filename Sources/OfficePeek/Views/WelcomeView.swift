@@ -23,18 +23,6 @@ struct WelcomeView: View {
         GridItem(.adaptive(minimum: 220, maximum: 280), spacing: 16)
     ]
 
-    private var docxCount: Int {
-        recentStore.records.filter { $0.format == .docx }.count
-    }
-
-    private var pptxCount: Int {
-        recentStore.records.filter { $0.format == .pptx }.count
-    }
-
-    private var xlsxCount: Int {
-        recentStore.records.filter { $0.format == .xlsx }.count
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             headerBar
@@ -172,9 +160,9 @@ struct WelcomeView: View {
                     .font(.system(size: 15, weight: .bold))
 
                 filterPill(title: "全部", count: recentStore.records.count, kind: nil)
-                filterPill(title: "DOCX", count: docxCount, kind: .docx)
-                filterPill(title: "PPTX", count: pptxCount, kind: .pptx)
-                filterPill(title: "XLSX", count: xlsxCount, kind: .xlsx)
+                filterPill(title: "DOCX", count: recentStore.docxCount, kind: .docx)
+                filterPill(title: "PPTX", count: recentStore.pptxCount, kind: .pptx)
+                filterPill(title: "XLSX", count: recentStore.xlsxCount, kind: .xlsx)
 
                 Spacer()
 

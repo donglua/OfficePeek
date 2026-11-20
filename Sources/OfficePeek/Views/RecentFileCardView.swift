@@ -154,10 +154,7 @@ public struct RecentFileCardView: View {
 
             Image(systemName: formatSymbolName)
                 .font(.system(size: 38, weight: .semibold))
-                .foregroundColor(ThemeColor.color(for: item.format).opacity(0.20))
-
-            ProgressView()
-                .scaleEffect(0.7)
+                .foregroundColor(ThemeColor.color(for: item.format).opacity(0.24))
         }
     }
 

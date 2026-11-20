@@ -43,6 +43,10 @@ if [[ -f "${ROOT_DIR}/Resources/AppIcon.icns" ]]; then
 fi
 printf "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
+if command -v strip >/dev/null 2>&1; then
+    strip -x "${APP_BUNDLE}/Contents/MacOS/OfficePeek" >/dev/null 2>&1 || true
+fi
+
 if command -v codesign >/dev/null 2>&1; then
     codesign --force --deep --sign - "${APP_BUNDLE}" >/dev/null 2>&1 || true
 fi

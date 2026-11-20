@@ -429,6 +429,68 @@ struct OfficePeekTests {
         #expect(exported.size.width > 0 && exported.size.height > 0)
     }
 
+    @Test("冷启动按需懒加载缩略图、磁盘缓存命中、修改失效及格式计数缓存")
+    @MainActor
+    func lazyStartupDiskThumbnailCacheAndDeduplication() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-thumb-cache-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let storageURL = tempDir.appendingPathComponent("recent.json")
+        let cacheDir = tempDir.appendingPathComponent("thumb_cache", isDirectory: true)
+
+        let pptxURL = tempDir.appendingPathComponent("cached_deck.pptx")
+        try TestFixtures.writeMinimalPPTX(to: pptxURL, slides: [
+            (backgroundHex: "FF0000", title: "Cached Slide")
+        ])
+
+        let store1 = RecentFilesStore(storageURL: storageURL, thumbnailCacheDirectory: cacheDir)
+        let record = try #require(await store1.recordOpened(url: pptxURL))
+        #expect(store1.pptxCount == 1)
+        #expect(store1.docxCount == 0)
+        #expect(store1.xlsxCount == 0)
+
+        let cachedFiles = try FileManager.default.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil)
+        #expect(cachedFiles.count == 1)
+        #expect(cachedFiles.first?.pathExtension == "png")
+
+        // 模拟冷启动：AppState 初始化不应在启动阶段立即全量生成缩略图
+        let store2 = RecentFilesStore(storageURL: storageURL, thumbnailCacheDirectory: cacheDir)
+        _ = AppState(recentStore: store2)
+        #expect(store2.thumbnails.isEmpty)
+        #expect(store2.pptxCount == 1)
+        #expect(store2.filteredRecords.count == 1)
+
+        // 并发重复请求同一记录缩略图时应去重并从磁盘缓存命中红色封面
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<4 {
+                group.addTask {
+                    await store2.loadThumbnailIfNeeded(for: record)
+                }
+            }
+        }
+        let reloadedThumb = try #require(store2.thumbnails[record.id])
+        let redPixel = try sampleCornerRGB(of: reloadedThumb)
+        #expect(redPixel.r > 200 && redPixel.b < 50)
+
+        // 修改原文件内容后，磁盘缓存 key 应自动失效并重新渲染为蓝色封面
+        try await Task.sleep(nanoseconds: 20_000_000)
+        try TestFixtures.writeMinimalPPTX(to: pptxURL, slides: [
+            (backgroundHex: "0000FF", title: "Modified Slide")
+        ])
+        let store3 = RecentFilesStore(storageURL: storageURL, thumbnailCacheDirectory: cacheDir)
+        await store3.loadThumbnailIfNeeded(for: record)
+        let updatedThumb = try #require(store3.thumbnails[record.id])
+        let bluePixel = try sampleCornerRGB(of: updatedThumb)
+        #expect(bluePixel.b > 200 && bluePixel.r < 50)
+
+        // 移除记录时应一并清理内存与计数
+        store3.remove(id: record.id)
+        #expect(store3.pptxCount == 0)
+        #expect(store3.filteredRecords.isEmpty)
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])

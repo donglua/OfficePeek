@@ -24,7 +24,6 @@ public final class AppState: ObservableObject {
 
     public init(recentStore: RecentFilesStore? = nil) {
         self.recentStore = recentStore ?? RecentFilesStore()
-        self.recentStore.refreshThumbnails()
     }
 
     public func openDocument(at url: URL) {
@@ -38,7 +37,7 @@ public final class AppState: ObservableObject {
         previewController.clearSelection()
         pageThumbnailCache.reset(for: stdURL)
         activeFileURL = stdURL
-        Task {
+        Task(priority: .utility) {
             await recentStore.recordOpened(url: stdURL)
         }
     }
