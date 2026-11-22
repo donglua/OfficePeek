@@ -3,7 +3,7 @@ import AppKit
 import JZOffice
 import OfficePeekKit
 
-/// 最近打开文档卡片组件，支持鼠标悬浮动效、毛玻璃固定图钉与右键快捷菜单
+/// 最近打开文档卡片组件，支持实体纸张悬浮动效、毛玻璃快捷操作与右键菜单
 public struct RecentFileCardView: View {
     public let item: RecentFileRecord
     public let thumbnail: NSImage?
@@ -50,29 +50,30 @@ public struct RecentFileCardView: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 0) {
                 thumbnailArea
-                Divider()
+                Rectangle()
+                    .fill(ThemeColor.hairlineSeparator)
+                    .frame(height: 1)
                 fileInfoArea
             }
             .background(
-                RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                RoundedRectangle(cornerRadius: ThemeRadius.card, style: .continuous)
+                    .fill(ThemeColor.cardBackground)
             )
-            .clipShape(RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: ThemeRadius.card, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous)
-                    .stroke(
-                        isHovered ? Color.accentColor.opacity(0.4) : ThemeColor.subtleBorder,
+                RoundedRectangle(cornerRadius: ThemeRadius.card, style: .continuous)
+                    .strokeBorder(
+                        isHovered ? ThemeColor.elevatedBorder : ThemeColor.subtleBorder,
                         lineWidth: 1
                     )
             )
             .shadow(
-                color: Color.black.opacity(isHovered ? 0.14 : 0.04),
-                radius: isHovered ? 8 : 2,
+                color: Color.black.opacity(isHovered ? 0.12 : 0.045),
+                radius: isHovered ? 12 : 3,
                 x: 0,
-                y: isHovered ? 4 : 1
+                y: isHovered ? 6 : 1.5
             )
-            .scaleEffect(isHovered ? 1.01 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHovered)
+            .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isHovered)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -106,98 +107,156 @@ public struct RecentFileCardView: View {
     }
 
     private var thumbnailArea: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .top) {
             ZStack {
-                Color(nsColor: .windowBackgroundColor).opacity(0.5)
+                ThemeColor.thumbnailStageBackground
 
                 if let thumbnail {
                     Image(nsImage: thumbnail)
                         .resizable()
                         .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
                         )
-                        .padding(8)
+                        .shadow(
+                            color: Color.black.opacity(isHovered ? 0.18 : 0.09),
+                            radius: isHovered ? 8 : 3,
+                            x: 0,
+                            y: isHovered ? 4 : 1.5
+                        )
+                        .offset(y: isHovered ? -2.5 : 0)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
                 } else {
                     placeholderPaperView
+                        .offset(y: isHovered ? -2.5 : 0)
                 }
             }
-            .frame(height: 140)
+            .frame(height: 148)
             .frame(maxWidth: .infinity)
             .clipped()
 
-            HStack(spacing: 6) {
-                if item.isPinned || isHovered {
-                    pinButton
+            HStack(alignment: .center) {
+                HStack(spacing: 6) {
+                    quickActionChip(
+                        systemImage: item.isPinned ? "pin.fill" : "pin",
+                        foregroundColor: item.isPinned ? .orange : .secondary,
+                        helpText: item.isPinned ? "取消固定" : "固定到顶部",
+                        action: onTogglePin
+                    )
+
+                    quickActionChip(
+                        systemImage: "folder",
+                        foregroundColor: .secondary,
+                        helpText: "在 Finder 中显示",
+                        action: onReveal
+                    )
                 }
-                FormatBadgeView(kind: item.format, compact: true)
+                .opacity(isHovered ? 1 : 0)
+                .offset(y: isHovered ? 0 : -3)
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    if item.isPinned {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 20, height: 20)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(Color.orange.opacity(0.30), lineWidth: 0.5)
+                                )
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.orange)
+                        }
+                        .help("已固定到顶部")
+                    }
+                    FormatBadgeView(kind: item.format, compact: true)
+                }
             }
-            .padding(8)
+            .padding(10)
         }
     }
 
     private var placeholderPaperView: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(ThemeColor.tint(for: item.format))
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
+            RoundedRectangle(cornerRadius: ThemeRadius.small, style: .continuous)
+                .fill(ThemeColor.cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(ThemeColor.color(for: item.format).opacity(0.20), lineWidth: 0.5)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 14)
+                    RoundedRectangle(cornerRadius: ThemeRadius.small, style: .continuous)
+                        .fill(ThemeColor.tint(for: item.format).opacity(0.65))
                 )
-                .shadow(color: Color.black.opacity(0.03), radius: 2, x: 0, y: 1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: ThemeRadius.small, style: .continuous)
+                        .strokeBorder(ThemeColor.color(for: item.format).opacity(0.22), lineWidth: 0.75)
+                )
+                .shadow(
+                    color: Color.black.opacity(isHovered ? 0.14 : 0.06),
+                    radius: isHovered ? 7 : 3,
+                    x: 0,
+                    y: isHovered ? 3.5 : 1.5
+                )
+                .padding(.horizontal, 34)
+                .padding(.vertical, 16)
 
             Image(systemName: formatSymbolName)
-                .font(.system(size: 38, weight: .semibold))
-                .foregroundColor(ThemeColor.color(for: item.format).opacity(0.24))
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundColor(ThemeColor.color(for: item.format).opacity(0.32))
         }
     }
 
-    private var pinButton: some View {
+    private func quickActionChip(
+        systemImage: String,
+        foregroundColor: Color,
+        helpText: String,
+        action: @escaping () -> Void
+    ) -> some View {
         ZStack {
             Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 22, height: 22)
+                .fill(.regularMaterial)
+                .frame(width: 24, height: 24)
                 .overlay(
                     Circle()
-                        .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
+                        .strokeBorder(ThemeColor.subtleBorder, lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                .shadow(color: Color.black.opacity(0.10), radius: 3, x: 0, y: 1)
 
-            Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(item.isPinned ? .orange : .secondary)
+            Image(systemName: systemImage)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundColor(foregroundColor)
         }
         .contentShape(Circle())
-        .onTapGesture {
-            onTogglePin()
-        }
-        .help(item.isPinned ? "取消固定" : "固定到顶部")
+        .onTapGesture(perform: action)
+        .help(helpText)
     }
 
     private var fileInfoArea: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: ThemeSpacing.xs) {
             Text(item.displayName)
-                .font(ThemeTypography.bodyPrimary.weight(.semibold))
+                .font(ThemeTypography.cardTitle)
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             HStack(spacing: 6) {
-                Text(item.pageSummary)
-                Text("·")
-                Text(item.formattedFileSize)
+                Text("\(item.pageSummary) · \(item.formattedFileSize)")
+                    .monospacedDigit()
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(item.relativeLastOpenedText())
+                    .lineLimit(1)
+                    .foregroundColor(.secondary.opacity(0.85))
             }
-            .font(ThemeTypography.bodySecondary)
+            .font(ThemeTypography.metaCaption)
             .foregroundColor(.secondary)
-            .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(.horizontal, ThemeSpacing.md)
+        .padding(.vertical, 10)
     }
 }

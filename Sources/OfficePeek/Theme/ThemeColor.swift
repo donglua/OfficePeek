@@ -2,6 +2,16 @@ import SwiftUI
 import JZOffice
 
 public enum ThemeColor {
+    /// 应用品牌色：低饱和靛蓝，兼顾浅色与深色外观。
+    public static let brandPrimary = Color(red: 0.35, green: 0.39, blue: 0.91)
+    public static let brandSecondary = Color(red: 0.50, green: 0.45, blue: 0.92)
+
+    public static let windowBackground = Color(nsColor: .windowBackgroundColor)
+    public static let canvasBackground = Color(nsColor: .underPageBackgroundColor)
+    public static let cardBackground = Color(nsColor: .controlBackgroundColor)
+    public static let insetBackground = Color.primary.opacity(0.035)
+    public static let hoverBackground = Color.primary.opacity(0.055)
+
     public static let docxPrimary = Color(red: 0.16, green: 0.44, blue: 0.96)
     public static let docxTint = Color.blue.opacity(0.12)
 
@@ -29,4 +39,10 @@ public enum ThemeColor {
 
     public static let subtleBorder = Color.primary.opacity(0.08)
     public static let subtleBorderDark = Color.white.opacity(0.10)
+    public static let thumbnailStageBackground = Color(nsColor: .underPageBackgroundColor).opacity(0.75)
+    public static let segmentedTrackBackground = Color.primary.opacity(0.055)
+    public static let segmentedPillBackground = Color(nsColor: .controlBackgroundColor)
+    public static let elevatedBorder = Color.accentColor.opacity(0.38)
+    public static let hairlineSeparator = Color.primary.opacity(0.07)
+    public static let skeletonFill = Color.primary.opacity(0.07)
 }

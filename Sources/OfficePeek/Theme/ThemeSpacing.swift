@@ -13,6 +13,8 @@ public enum ThemeSpacing {
 public enum ThemeRadius {
     public static let small: CGFloat = 6
     public static let medium: CGFloat = 10
+    public static let card: CGFloat = 12
     public static let large: CGFloat = 14
+    public static let extraLarge: CGFloat = 20
     public static let squircle: CGFloat = 18
 }

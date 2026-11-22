@@ -37,6 +37,38 @@ public struct RecentFileRecord: Codable, Identifiable, Equatable, Sendable {
         }
     }
 
+    /// 相对于给定参考时间的简短打开时间文案
+    public func relativeLastOpenedText(relativeTo referenceDate: Date = Date()) -> String {
+        let elapsed = max(0, referenceDate.timeIntervalSince(lastOpenedAt))
+        if elapsed < 60 {
+            return "刚刚"
+        }
+        let minutes = Int(elapsed / 60)
+        if minutes < 60 {
+            return "\(minutes) 分钟前"
+        }
+        let hours = Int(elapsed / 3600)
+        if hours < 24 {
+            return "\(hours) 小时前"
+        }
+        let calendar = Calendar.current
+        let refDay = calendar.startOfDay(for: referenceDate)
+        let targetDay = calendar.startOfDay(for: lastOpenedAt)
+        if let dayDiff = calendar.dateComponents([.day], from: targetDay, to: refDay).day, dayDiff == 1 {
+            return "昨天"
+        }
+        let days = Int(elapsed / 86_400)
+        if days < 7 {
+            return "\(days) 天前"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = calendar.isDate(lastOpenedAt, equalTo: referenceDate, toGranularity: .year)
+            ? "M月d日"
+            : "yyyy/M/d"
+        return formatter.string(from: lastOpenedAt)
+    }
+
     public init(
         path: String,
         displayName: String,
@@ -104,6 +136,12 @@ public final class RecentFilesStore: ObservableObject {
         }
     }
     @Published public private(set) var filteredRecords: [RecentFileRecord] = []
+    public var pinnedFilteredRecords: [RecentFileRecord] {
+        filteredRecords.filter(\.isPinned)
+    }
+    public var unpinnedFilteredRecords: [RecentFileRecord] {
+        filteredRecords.filter { !$0.isPinned }
+    }
     @Published public private(set) var docxCount: Int = 0
     @Published public private(set) var pptxCount: Int = 0
     @Published public private(set) var xlsxCount: Int = 0

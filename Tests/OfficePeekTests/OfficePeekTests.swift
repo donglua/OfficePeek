@@ -491,6 +491,59 @@ struct OfficePeekTests {
         #expect(store3.filteredRecords.isEmpty)
     }
 
+    @Test("RecentFileRecord 相对时间格式化与置顶分区属性正确区分记录")
+    @MainActor
+    func relativeLastOpenedTextAndPartitions() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-partition-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let justNow = RecentFileRecord(
+            path: tempDir.appendingPathComponent("a.docx").path,
+            displayName: "a.docx",
+            format: .docx,
+            pageCount: 1,
+            sheetNames: [],
+            fileSizeBytes: 512,
+            lastOpenedAt: now.addingTimeInterval(-20),
+            isPinned: true
+        )
+        let twoHoursAgo = RecentFileRecord(
+            path: tempDir.appendingPathComponent("b.pptx").path,
+            displayName: "b.pptx",
+            format: .pptx,
+            pageCount: 4,
+            sheetNames: [],
+            fileSizeBytes: 1024,
+            lastOpenedAt: now.addingTimeInterval(-2 * 3600),
+            isPinned: false
+        )
+        let yesterday = RecentFileRecord(
+            path: tempDir.appendingPathComponent("c.xlsx").path,
+            displayName: "c.xlsx",
+            format: .xlsx,
+            pageCount: 2,
+            sheetNames: ["Sheet1"],
+            fileSizeBytes: 2048,
+            lastOpenedAt: now.addingTimeInterval(-26 * 3600),
+            isPinned: false
+        )
+
+        #expect(justNow.relativeLastOpenedText(relativeTo: now) == "刚刚")
+        #expect(twoHoursAgo.relativeLastOpenedText(relativeTo: now) == "2 小时前")
+        #expect(yesterday.relativeLastOpenedText(relativeTo: now) == "昨天")
+
+        let store = RecentFilesStore(storageURL: tempDir.appendingPathComponent("recent.json"))
+        store.register(record: justNow)
+        store.register(record: twoHoursAgo)
+        store.register(record: yesterday)
+
+        #expect(store.pinnedFilteredRecords.map(\.id) == [justNow.id])
+        #expect(store.unpinnedFilteredRecords.map(\.id) == [twoHoursAgo.id, yesterday.id])
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])

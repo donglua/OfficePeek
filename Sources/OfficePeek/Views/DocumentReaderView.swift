@@ -3,35 +3,46 @@ import UniformTypeIdentifiers
 import JZOffice
 import OfficePeekKit
 
-/// 文档阅读器主视图（系统级工具栏 + 可折叠侧边栏 + 主预览画布 + 底部工作表标签栏）
+/// 文档阅读器主视图（系统级工具栏 + 可折叠侧边栏 + 主预览画布 + 底部工作表标签栏 + 全窗拖拽切换）
 struct DocumentReaderView: View {
     let fileURL: URL
     @ObservedObject var appState: AppState
     @ObservedObject var controller: OfficePreviewController
     @ObservedObject var pageThumbnailCache: PageThumbnailCache
 
+    private typealias ViewState = SwiftUI.State
+    @ViewState private var isDragTargeted = false
+
     var body: some View {
-        HStack(spacing: 0) {
-            if appState.isSidebarVisible {
-                DocumentSidebarView(
-                    fileURL: fileURL,
-                    controller: controller,
-                    pageThumbnailCache: pageThumbnailCache
-                )
-                Divider()
-            }
+        ZStack {
+            HStack(spacing: 0) {
+                if appState.isSidebarVisible {
+                    DocumentSidebarView(
+                        fileURL: fileURL,
+                        controller: controller,
+                        pageThumbnailCache: pageThumbnailCache
+                    )
+                    .transition(.move(edge: .leading).combined(with: .opacity))
 
-            VStack(spacing: 0) {
-                OfficePreviewView(
-                    fileURL: fileURL,
-                    controller: controller
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Rectangle()
+                        .fill(ThemeColor.hairlineSeparator)
+                        .frame(width: 1)
+                }
 
-                OfficeSheetTabs(controller: controller)
+                VStack(spacing: 0) {
+                    OfficePreviewView(
+                        fileURL: fileURL,
+                        controller: controller
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    OfficeSheetTabs(controller: controller)
+                }
             }
+            .background(ThemeColor.canvasBackground)
+
+            DropOverlayView(isTargeted: isDragTargeted)
         }
-        .background(Color(nsColor: .underPageBackgroundColor))
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button {
@@ -52,14 +63,16 @@ struct DocumentReaderView: View {
             }
 
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     if let kind = controller.metadata?.format {
                         FormatBadgeView(kind: kind, compact: true)
                     }
                     Text(fileURL.lastPathComponent)
                         .font(ThemeTypography.windowTitle)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
+                .padding(.horizontal, 6)
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
@@ -75,7 +88,8 @@ struct DocumentReaderView: View {
 
                         Text("\(controller.currentPage) / \(controller.pageCount)")
                             .font(ThemeTypography.monospacedValue)
-                            .frame(minWidth: 48)
+                            .monospacedDigit()
+                            .frame(minWidth: 50)
 
                         Button {
                             controller.jumpToPage(min(controller.pageCount, controller.currentPage + 1))
@@ -101,7 +115,8 @@ struct DocumentReaderView: View {
                     } label: {
                         Text("\(Int(round(controller.zoom * 100)))%")
                             .font(ThemeTypography.monospacedValue)
-                            .frame(minWidth: 44)
+                            .monospacedDigit()
+                            .frame(minWidth: 46)
                     }
                     .keyboardShortcut("0", modifiers: [.command])
                     .help("恢复 100% (⌘0)")
@@ -163,18 +178,10 @@ struct DocumentReaderView: View {
                 .help("导出或更多操作")
             }
         }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                guard let data = item as? Data,
-                      let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                    return
-                }
-                Task { @MainActor in
-                    appState.openDocument(at: url)
-                }
+        .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
+            DropOverlayView.extractFirstFileURL(from: providers) { url in
+                appState.openDocument(at: url)
             }
-            return true
         }
         .sheet(isPresented: $appState.showWarningsSheet) {
             warningsDialog
@@ -183,28 +190,67 @@ struct DocumentReaderView: View {
 
     private var warningsDialog: some View {
         let warnings = controller.metadata?.warnings ?? []
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("文档兼容性提示 (\(warnings.count))")
-                    .font(.system(size: 15, weight: .bold))
-                Spacer()
-                Button("关闭") {
-                    appState.showWarningsSheet = false
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous)
+                        .fill(Color.orange.opacity(0.14))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.orange)
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("文档兼容性提示 (\(warnings.count))")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("以下元素已按最优兼容策略降级渲染，不影响正文阅读。")
+                        .font(ThemeTypography.bodySecondary)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
             }
-            Divider()
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(warnings.enumerated()), id: \.offset) { idx, msg in
-                        Text("\(idx + 1). \(msg)")
-                            .font(.system(size: 12))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(String(format: "%02d", idx + 1))
+                                .font(ThemeTypography.monospacedValue)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 1)
+
+                            Text(msg)
+                                .font(.system(size: 12.5))
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(11)
+                        .background(
+                            RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous)
+                                .fill(ThemeColor.thumbnailStageBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: ThemeRadius.medium, style: .continuous)
+                                .strokeBorder(ThemeColor.hairlineSeparator, lineWidth: 0.75)
+                        )
                     }
                 }
             }
             .frame(minHeight: 160, maxHeight: 280)
+
+            HStack {
+                Spacer()
+                Button("完成") {
+                    appState.showWarningsSheet = false
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(20)
-        .frame(width: 460)
+        .frame(width: 470)
     }
 }

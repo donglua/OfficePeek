@@ -12,7 +12,7 @@ public struct FormatBadgeView: View {
     }
 
     private var cornerRadius: CGFloat {
-        compact ? 4 : 6
+        compact ? 5 : 6
     }
 
     private var horizontalPadding: CGFloat {
@@ -20,12 +20,13 @@ public struct FormatBadgeView: View {
     }
 
     private var verticalPadding: CGFloat {
-        compact ? 2 : 3
+        compact ? 2.5 : 3.5
     }
 
     public var body: some View {
         Text(kind.rawValue)
             .font(ThemeTypography.captionBadge)
+            .tracking(0.3)
             .foregroundColor(.white)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
@@ -35,7 +36,7 @@ public struct FormatBadgeView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
             )
     }
 }

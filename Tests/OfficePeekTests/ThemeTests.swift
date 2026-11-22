@@ -26,6 +26,12 @@ struct ThemeTests {
 
         _ = ThemeColor.subtleBorder
         _ = ThemeColor.subtleBorderDark
+        _ = ThemeColor.thumbnailStageBackground
+        _ = ThemeColor.segmentedTrackBackground
+        _ = ThemeColor.segmentedPillBackground
+        _ = ThemeColor.elevatedBorder
+        _ = ThemeColor.hairlineSeparator
+        _ = ThemeColor.skeletonFill
     }
 
     @Test("ThemeTypography 字阶完整性")
@@ -37,6 +43,9 @@ struct ThemeTests {
         _ = ThemeTypography.bodySecondary
         _ = ThemeTypography.captionBadge
         _ = ThemeTypography.monospacedValue
+        _ = ThemeTypography.cardTitle
+        _ = ThemeTypography.metaCaption
+        _ = ThemeTypography.sidebarBadge
     }
 
     @Test("ThemeSpacing 与 ThemeRadius 间距和圆角数值满足排版阶梯")
@@ -51,6 +60,7 @@ struct ThemeTests {
 
         #expect(ThemeRadius.small == 6)
         #expect(ThemeRadius.medium == 10)
+        #expect(ThemeRadius.card == 12)
         #expect(ThemeRadius.large == 14)
         #expect(ThemeRadius.squircle == 18)
     }
