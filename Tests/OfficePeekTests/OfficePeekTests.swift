@@ -429,6 +429,112 @@ struct OfficePeekTests {
         #expect(exported.size.width > 0 && exported.size.height > 0)
     }
 
+    @Test("对齐 JZOfficeKit v0.17.0：DOCX 脚注与尾注解析、连续编号、分隔线与全文检索")
+    func docxFootnotesAndEndnotesIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-docx-notes-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docxURL = tempDir.appendingPathComponent("notes.docx")
+        try TestFixtures.writeFootnotesAndEndnotesDOCX(to: docxURL)
+
+        let doc = try NativeCore.parseDocument(at: docxURL.path)
+        let blockTexts = doc.blocks.map { $0.paragraphs.map { $0.runs.map(\.text).joined() }.joined() }
+        #expect(blockTexts == [
+            "Alpha1",
+            "End1",
+            "1\tFirst footnote detail",
+            "1\tFirst endnote detail"
+        ])
+
+        let firstFootnoteParagraph = try #require(doc.blocks[2].paragraphs.first)
+        #expect(firstFootnoteParagraph.borderTop != 0)
+
+        let noteMatches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "First footnote detail")
+        let endnoteMatches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "First endnote detail")
+        let unusedMatches = try await NativeCore.searchDocumentAsync(at: docxURL.path, query: "Unused footnote")
+        #expect(!noteMatches.isEmpty)
+        #expect(!endnoteMatches.isEmpty)
+        #expect(unusedMatches.isEmpty)
+
+        let outPNG = tempDir.appendingPathComponent("notes.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: docxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 600, height: 800),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+    }
+
+    @Test("对齐 JZOfficeKit v0.17.0：PPTX 表格合并单元格与标准面积图跨零区段渲染")
+    func pptxMergedTableAndAreaChartIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-pptx-area-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let pptxURL = tempDir.appendingPathComponent("merged_table_area.pptx")
+        try TestFixtures.writeMergedTableAndAreaChartPPTX(to: pptxURL)
+
+        let doc = try NativeCore.parseDocument(at: pptxURL.path)
+        let page = try #require(doc.pages.first)
+
+        let table = try #require(page.elements.first(where: { $0.type == .table }))
+        #expect(table.merges.count == 2)
+        let firstMerge = table.merges[0]
+        let secondMerge = table.merges[1]
+        #expect(firstMerge.startRow == 0 && firstMerge.endRow == 0)
+        #expect(firstMerge.startColumn == 0 && firstMerge.endColumn == 1)
+        #expect(secondMerge.startRow == 0 && secondMerge.endRow == 1)
+        #expect(secondMerge.startColumn == 2 && secondMerge.endColumn == 2)
+
+        let areaColor: UInt32 = 0xFFC03050
+        let areaElement = try #require(page.elements.first(where: {
+            $0.type == .path && $0.fill == areaColor && !$0.paths.isEmpty
+        }))
+        let areaPath = try #require(areaElement.paths.first)
+        #expect(areaPath.fill)
+
+        let outPNG = tempDir.appendingPathComponent("merged_table_area.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: pptxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 800, height: 450),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+    }
+
+    @Test("对齐 JZOfficeKit v0.17.0：XLSX 单元格缩进与自动缩字解码与渲染")
+    func xlsxIndentAndShrinkToFitIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-xlsx-indent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let xlsxURL = tempDir.appendingPathComponent("indent_shrink.xlsx")
+        try TestFixtures.writeIndentAndShrinkToFitXLSX(to: xlsxURL)
+
+        let doc = try NativeCore.parseDocument(at: xlsxURL.path)
+        let styled = try #require(doc.cellStyles.first(where: { $0.indent == 3 && $0.shrinkToFit }))
+        #expect(styled.indent == 3)
+        #expect(styled.shrinkToFit)
+
+        let outPNG = tempDir.appendingPathComponent("indent_shrink.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: xlsxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 600, height: 400),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        #expect(exported.size.width > 0 && exported.size.height > 0)
+    }
+
     @Test("冷启动按需懒加载缩略图、磁盘缓存命中、修改失效及格式计数缓存")
     @MainActor
     func lazyStartupDiskThumbnailCacheAndDeduplication() async throws {
