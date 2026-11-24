@@ -66,20 +66,31 @@ final class PresentationWindowController: NSWindowController, NSWindowDelegate, 
     private var scrollAccumulator = PresentationScrollAccumulator()
     private var eventMonitor: Any?
     private var screenObserver: NSObjectProtocol?
-    private var previousPresentationOptions: NSApplication.PresentationOptions = []
+    private var previousPresentationOptions: NSApplication.PresentationOptions?
     private var isTornDown = false
+
+    private final class EmptyPresenter: PresentationPresenting {
+        func dismiss() {}
+    }
 
     static func present(
         _ request: PresentationLaunchRequest,
         onExit: @escaping @MainActor (Int) -> Void
     ) -> any PresentationPresenting {
-        let controller = PresentationWindowController(request: request, onExit: onExit)
+        guard let controller = PresentationWindowController(request: request, onExit: onExit) else {
+            Task { @MainActor in
+                onExit(request.startSlide)
+            }
+            return EmptyPresenter()
+        }
         controller.show()
         return controller
     }
 
-    init(request: PresentationLaunchRequest, onExit: @escaping @MainActor (Int) -> Void) {
-        let screen = request.screen ?? NSScreen.main ?? NSScreen.screens[0]
+    init?(request: PresentationLaunchRequest, onExit: @escaping @MainActor (Int) -> Void) {
+        guard let screen = request.screen ?? NSScreen.main ?? NSScreen.screens.first else {
+            return nil
+        }
         let scale = screen.backingScaleFactor
         let pixelSize = CGSize(width: screen.frame.width * scale, height: screen.frame.height * scale)
         let renderer = PresentationSlideRenderer(fileURL: request.fileURL, targetPixelSize: pixelSize)
@@ -121,8 +132,11 @@ final class PresentationWindowController: NSWindowController, NSWindowDelegate, 
     }
 
     func show() {
-        previousPresentationOptions = NSApp.presentationOptions
-        NSApp.presentationOptions = [.hideDock, .hideMenuBar]
+        let currentOptions = NSApp.presentationOptions
+        if !currentOptions.contains(.fullScreen) {
+            previousPresentationOptions = currentOptions
+            NSApp.presentationOptions = [.hideDock, .hideMenuBar]
+        }
         installEventMonitor()
         observeScreenChanges()
         NSApp.activate()
@@ -255,7 +269,10 @@ final class PresentationWindowController: NSWindowController, NSWindowDelegate, 
             self.screenObserver = nil
         }
         viewModel.finish()
-        NSApp.presentationOptions = previousPresentationOptions
+        if let previousPresentationOptions {
+            NSApp.presentationOptions = previousPresentationOptions
+            self.previousPresentationOptions = nil
+        }
         window?.delegate = nil
         window?.orderOut(nil)
         window?.close()
