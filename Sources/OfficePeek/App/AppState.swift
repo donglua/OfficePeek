@@ -54,6 +54,7 @@ public final class AppState: ObservableObject {
         previewController.clearSelection()
         pageThumbnailCache.reset(for: stdURL)
         activeFileURL = stdURL
+        refreshPresentationAvailability()
         Task(priority: .utility) {
             await recentStore.recordOpened(url: stdURL)
         }
@@ -67,6 +68,7 @@ public final class AppState: ObservableObject {
         pageThumbnailCache.clear()
         activeFileURL = nil
         showWarningsSheet = false
+        refreshPresentationAvailability()
     }
 
     /// 打开全文检索栏并在后台按需预热当前文档的检索索引
@@ -155,7 +157,7 @@ public final class AppState: ObservableObject {
     private func refreshPresentationAvailability() {
         let meta = previewController.metadata
         let available = !isPresenting
-            && activeFileURL != nil
+            && activeFileURL?.pathExtension.lowercased() == "pptx"
             && meta?.format == .pptx
             && (meta?.pageCount ?? 0) > 0
         if available != canStartPresentation {

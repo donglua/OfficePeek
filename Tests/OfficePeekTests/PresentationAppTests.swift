@@ -166,6 +166,7 @@ struct AppStatePresentationTests {
         appState.startPresentation(.beginning)
 
         #expect(!appState.isPresenting)
+        #expect(!appState.canStartPresentation)
         #expect(recorder.requests.isEmpty)
     }
 
