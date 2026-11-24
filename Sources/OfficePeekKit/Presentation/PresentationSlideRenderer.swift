@@ -90,6 +90,10 @@ public final class PresentationSlideRenderer: ObservableObject {
                 return
             }
             guard let self, !Task.isCancelled else { return }
+            if document.pages.isEmpty {
+                self.loadError = "演示文稿不包含任何幻灯片"
+                return
+            }
             guard slide <= document.pages.count else { return }
             do {
                 let image = try await Task.detached(priority: .userInitiated) {

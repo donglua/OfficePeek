@@ -345,4 +345,19 @@ struct PresentationSlideRendererTests {
         #expect(renderer.loadError != nil)
         #expect(renderer.images.isEmpty)
     }
+
+    @Test("空 PPTX（0 张幻灯片）时给出 loadError 而不是永久加载")
+    @MainActor
+    func reportsLoadErrorForEmptyPresentation() async throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("empty.pptx")
+        try TestFixtures.writeMinimalPPTX(to: url, slides: [])
+
+        let renderer = PresentationSlideRenderer(fileURL: url, targetPixelSize: CGSize(width: 160, height: 90))
+        renderer.show(slide: 1)
+        await renderer.waitUntilIdle()
+        #expect(renderer.loadError != nil)
+        #expect(renderer.images.isEmpty)
+    }
 }
