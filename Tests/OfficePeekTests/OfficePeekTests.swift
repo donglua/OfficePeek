@@ -717,6 +717,130 @@ struct OfficePeekTests {
         #expect(store.xlsxCount == 2)
     }
 
+    @Test("对齐 JZOfficeKit v0.18.0：DOCX 内嵌图表与 PPTX 堆叠图表/SmartArt 解析与导出")
+    func docxChartAndPptxSmartArtIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-v018-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docxURL = tempDir.appendingPathComponent("chart.docx")
+        try TestFixtures.writeEmbeddedChartDOCX(to: docxURL)
+        let docx = try NativeCore.parseDocument(at: docxURL.path)
+        let hasChartText = docx.blocks.contains { block in
+            block.paragraphs.contains { p in
+                p.runs.contains { $0.text.contains("DOCX Sales") }
+            }
+        }
+        #expect(hasChartText)
+        let docxOutPNG = tempDir.appendingPathComponent("docx_chart.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: docxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 600, height: 800),
+            to: docxOutPNG
+        )
+        let exportedDocx = try #require(NSImage(contentsOf: docxOutPNG))
+        #expect(exportedDocx.size.width > 0 && exportedDocx.size.height > 0)
+
+        let pptxURL = tempDir.appendingPathComponent("smartart_stacked.pptx")
+        try TestFixtures.writeStackedChartAndSmartArtPPTX(to: pptxURL)
+        let pptx = try NativeCore.parseDocument(at: pptxURL.path)
+        let page = try #require(pptx.pages.first)
+        let hasSmartArtText = page.elements.contains { el in
+            el.paragraphs.contains { p in
+                p.runs.contains { $0.text == "SmartArtPlan" }
+            }
+        }
+        let hasChartBar = page.elements.contains { ($0.type == .rect || $0.type == .path) && $0.fill == 0xFF1E88E5 }
+        #expect(hasSmartArtText)
+        #expect(hasChartBar)
+
+        let pptxOutPNG = tempDir.appendingPathComponent("pptx_smartart.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: pptxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 800, height: 450),
+            to: pptxOutPNG
+        )
+        let exportedPptx = try #require(NSImage(contentsOf: pptxOutPNG))
+        #expect(exportedPptx.size.width > 0 && exportedPptx.size.height > 0)
+    }
+
+    @Test("对齐 JZOfficeKit v0.18.0 ~ v0.19.0：XLSX 浮动图片、形状/图表、数字/ISO 日期格式与 PNG/PDF 导出")
+    func xlsxDrawingsChartsFormatsAndExportIntegration() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-v019-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let xlsxURL = tempDir.appendingPathComponent("drawings_formats.xlsx")
+        try TestFixtures.writeDrawingsChartAndFormatsXLSX(to: xlsxURL)
+
+        let doc = try NativeCore.parseDocument(at: xlsxURL.path)
+        #expect(!doc.warnings.contains { $0.contains("Unsupported number format") })
+
+        let sheet = try #require(doc.sheets.first)
+        #expect(sheet.elements.contains { $0.type == .image && $0.image == "xl/media/image1.png" })
+        #expect(sheet.elements.contains { ($0.type == .rect || $0.type == .path) && $0.fill == 0xFFE53935 })
+        #expect(sheet.elements.contains { ($0.type == .rect || $0.type == .path) && $0.fill == 0xFF2E7D32 })
+
+        func cellText(_ row: Int, _ col: Int) -> String? {
+            sheet.cells.first { $0.row == row && $0.column == col }?.text
+        }
+        #expect(cellText(0, 1) == "$1,234.50")
+        #expect(cellText(1, 1) == "¥1,234.50")
+        #expect(cellText(2, 1) == "$ 1,234.50")
+        #expect(cellText(3, 1) == "12.3 M")
+        #expect(cellText(4, 1) == "1.23E+02")
+        #expect(cellText(5, 1) == "2026年11月24日")
+
+        // 验证 OfficePageRenderer 导出的 XLSX PNG 同时包含浮动 PNG 的蓝色像素与形状的红色像素
+        let outPNG = tempDir.appendingPathComponent("xlsx_drawings.png")
+        try await OfficePageRenderer.exportPNGAsync(
+            from: xlsxURL,
+            pageNumber: 1,
+            maxSize: CGSize(width: 800, height: 600),
+            to: outPNG
+        )
+        let exported = try #require(NSImage(contentsOf: outPNG))
+        let pixels = try sampleAllPixels(of: exported)
+        #expect(pixels.contains { $0.b > 180 && $0.r < 90 && $0.g < 90 })
+        #expect(pixels.contains { $0.r > 180 && $0.g < 90 && $0.b < 90 })
+
+        // 验证矢量 PDF 导出
+        let outPDF = tempDir.appendingPathComponent("xlsx_drawings.pdf")
+        try await OfficeExporter.exportPDFAsync(from: xlsxURL, to: outPDF)
+        let pdfData = try Data(contentsOf: outPDF)
+        #expect(pdfData.prefix(5) == Data("%PDF-".utf8))
+    }
+
+    private func sampleAllPixels(of image: NSImage) throws -> [(r: UInt8, g: UInt8, b: UInt8)] {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])
+        }
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        var full = [UInt8](repeating: 255, count: cgImage.width * cgImage.height * 4)
+        guard let ctx = CGContext(
+            data: &full,
+            width: cgImage.width,
+            height: cgImage.height,
+            bitsPerComponent: 8,
+            bytesPerRow: cgImage.width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw NSError(domain: "OfficePeekTests", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to allocate bitmap context"])
+        }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        var result: [(r: UInt8, g: UInt8, b: UInt8)] = []
+        result.reserveCapacity(cgImage.width * cgImage.height)
+        for i in stride(from: 0, to: full.count, by: 4) {
+            result.append((full[i], full[i + 1], full[i + 2]))
+        }
+        return result
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])
