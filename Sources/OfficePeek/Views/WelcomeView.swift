@@ -312,6 +312,8 @@ struct WelcomeView: View {
                     FormatBadgeView(kind: .docx)
                     FormatBadgeView(kind: .pptx)
                     FormatBadgeView(kind: .xlsx)
+                    FormatBadgeView(kind: .xlsx, label: "CSV")
+                    FormatBadgeView(kind: .xlsx, label: "TSV")
                 }
                 .padding(.top, 2)
             }

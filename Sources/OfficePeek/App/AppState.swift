@@ -90,7 +90,9 @@ public final class AppState: ObservableObject {
         panel.allowedContentTypes = [
             UTType(filenameExtension: "docx"),
             UTType(filenameExtension: "pptx"),
-            UTType(filenameExtension: "xlsx")
+            UTType(filenameExtension: "xlsx"),
+            UTType.commaSeparatedText,
+            UTType.tabSeparatedText
         ].compactMap { $0 }
         if panel.runModal() == .OK, let url = panel.url {
             openDocument(at: url)

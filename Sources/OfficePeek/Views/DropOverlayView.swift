@@ -29,7 +29,7 @@ struct DropOverlayView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
 
-                        Text("支持 .docx / .pptx / .xlsx · 毫秒级离线原生矢量渲染")
+                        Text("支持 .docx / .pptx / .xlsx / .csv / .tsv · 毫秒级离线原生矢量渲染")
                             .font(ThemeTypography.bodySecondary)
                             .foregroundColor(.secondary)
                     }
@@ -38,6 +38,8 @@ struct DropOverlayView: View {
                         FormatBadgeView(kind: .docx, compact: true)
                         FormatBadgeView(kind: .pptx, compact: true)
                         FormatBadgeView(kind: .xlsx, compact: true)
+                        FormatBadgeView(kind: .xlsx, label: "CSV", compact: true)
+                        FormatBadgeView(kind: .xlsx, label: "TSV", compact: true)
                     }
                     .padding(.top, ThemeSpacing.xxs)
                 }

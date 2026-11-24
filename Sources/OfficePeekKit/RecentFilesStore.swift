@@ -33,7 +33,14 @@ public struct RecentFileRecord: Codable, Identifiable, Equatable, Sendable {
         case .pptx:
             return "\(pageCount) 张幻灯片"
         case .xlsx:
-            return "\(pageCount) 个工作表"
+            switch fileURL.pathExtension.lowercased() {
+            case "csv":
+                return "CSV 数据表"
+            case "tsv":
+                return "TSV 数据表"
+            default:
+                return "\(pageCount) 个工作表"
+            }
         }
     }
 

@@ -65,7 +65,11 @@ struct DocumentReaderView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 7) {
                     if let kind = controller.metadata?.format {
-                        FormatBadgeView(kind: kind, compact: true)
+                        FormatBadgeView(
+                            kind: kind,
+                            label: FormatBadgeView.badgeLabel(for: kind, fileURL: fileURL),
+                            compact: true
+                        )
                     }
                     Text(fileURL.lastPathComponent)
                         .font(ThemeTypography.windowTitle)

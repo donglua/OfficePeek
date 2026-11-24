@@ -650,6 +650,73 @@ struct OfficePeekTests {
         #expect(store.unpinnedFilteredRecords.map(\.id) == [twoHoursAgo.id, yesterday.id])
     }
 
+    @Test("CSV 与 TSV 端到端支持：UTF-8 / GBK 解码、元数据速读、全文检索、封面渲染与徽章展示")
+    @MainActor
+    func csvAndTsvEndToEndSupport() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-csv-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // 1. UTF-8 CSV（含引号、千分位数值与引号内换行）
+        let csvURL = tempDir.appendingPathComponent("quarterly_sales.csv")
+        let csvContent = "Region,Revenue,Note\r\n\"East, China\",\"12,800.50\",\"Line A\nLine B\"\r\nNorth,9500,OK\r\n"
+        try csvContent.write(to: csvURL, atomically: true, encoding: .utf8)
+
+        let csvMeta = try await OfficeMetadata.readAsync(from: csvURL)
+        #expect(csvMeta.format == .xlsx)
+        #expect(csvMeta.pageCount == 1)
+        #expect(csvMeta.sheetNames == ["quarterly_sales"])
+
+        let csvDoc = try await NativeCore.parseDocumentAsync(at: csvURL.path)
+        #expect(csvDoc.kind == .xlsx)
+        #expect(csvDoc.sheets.count == 1)
+        #expect(csvDoc.sheets[0].cells.contains(where: { $0.text == "East, China" }))
+        #expect(csvDoc.sheets[0].cells.contains(where: { $0.text == "12,800.50" && $0.numeric }))
+
+        let csvMatches = try await NativeCore.searchDocumentAsync(at: csvURL.path, query: "east")
+        #expect(csvMatches.count == 1)
+        #expect(csvMatches[0].row == 1)
+        #expect(csvMatches[0].column == 0)
+
+        let csvThumb = try OfficeThumbnail.renderCGImage(from: csvURL, maxSize: CGSize(width: 320, height: 240))
+        #expect(csvThumb.width > 0 && csvThumb.height > 0)
+
+        // 2. GB18030 / GBK 中文 CSV
+        let gbkURL = tempDir.appendingPathComponent("chinese_gbk.csv")
+        let gbkEncoding = String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+            )
+        )
+        let gbkData = try #require("部门,人数\r\n研发部,42\r\n".data(using: gbkEncoding))
+        try gbkData.write(to: gbkURL)
+
+        let gbkDoc = try await NativeCore.parseDocumentAsync(at: gbkURL.path)
+        #expect(gbkDoc.warnings.isEmpty)
+        #expect(gbkDoc.sheets[0].cells.contains(where: { $0.text == "研发部" }))
+
+        // 3. TSV 与界面徽章 / 摘要文案
+        let tsvURL = tempDir.appendingPathComponent("metrics.tsv")
+        try "Key\tValue\nAlpha,Beta\t100\n".write(to: tsvURL, atomically: true, encoding: .utf8)
+        let tsvDoc = try await NativeCore.parseDocumentAsync(at: tsvURL.path)
+        #expect(tsvDoc.sheets[0].cells.contains(where: { $0.text == "Alpha,Beta" }))
+
+        #expect(FormatBadgeView.badgeLabel(for: .xlsx, fileURL: csvURL) == "CSV")
+        #expect(FormatBadgeView.badgeLabel(for: .xlsx, fileURL: tsvURL) == "TSV")
+        #expect(FormatBadgeView.badgeLabel(for: .xlsx, fileURL: tempDir.appendingPathComponent("book.xlsx")) == "XLSX")
+
+        let store = RecentFilesStore(storageURL: tempDir.appendingPathComponent("recent.json"))
+        let csvRecord = try #require(await store.recordOpened(url: csvURL))
+        #expect(csvRecord.format == .xlsx)
+        #expect(csvRecord.pageSummary == "CSV 数据表")
+        #expect(store.xlsxCount == 1)
+
+        let tsvRecord = try #require(await store.recordOpened(url: tsvURL))
+        #expect(tsvRecord.pageSummary == "TSV 数据表")
+        #expect(store.xlsxCount == 2)
+    }
+
     private func sampleCornerRGB(of image: NSImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw NSError(domain: "OfficePeekTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing CGImage"])

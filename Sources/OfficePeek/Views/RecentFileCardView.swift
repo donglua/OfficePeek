@@ -176,7 +176,11 @@ public struct RecentFileCardView: View {
                         }
                         .help("已固定到顶部")
                     }
-                    FormatBadgeView(kind: item.format, compact: true)
+                    FormatBadgeView(
+                        kind: item.format,
+                        label: FormatBadgeView.badgeLabel(for: item.format, fileURL: item.fileURL),
+                        compact: true
+                    )
                 }
             }
             .padding(10)

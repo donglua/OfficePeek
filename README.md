@@ -1,6 +1,6 @@
 # OfficePeek
 
-轻量、极速、离线的 macOS 原生 Office 文档查看器（支持 `.docx`、`.pptx`、`.xlsx`），基于 [`JZOfficeKit`](https://github.com/donglua/JZOfficeKit)（Rust `jz-office-core` + Apple `CoreGraphics` / `CoreText`）构建。
+轻量、极速、离线的 macOS 原生 Office 文档查看器（支持 `.docx`、`.pptx`、`.xlsx`、`.csv`、`.tsv`），基于 [`JZOfficeKit`](https://github.com/donglua/JZOfficeKit)（Rust `jz-office-core` + Apple `CoreGraphics` / `CoreText`）构建。
 
 ## 核心特性
 
@@ -11,7 +11,7 @@
   - 检索命中高亮绘制（自适应浮动环绕与 XLSX 冻结象限裁剪）、命中数量即时统计、当前焦点环形遍历（`Cmd + G` / `Cmd + Shift + G`）与视口平滑自动居中/冻结区避让定位。
 - **原生文档框选与快捷复制**：
   - **DOCX / PPTX**：原生支持鼠标自由拖拽框选、双击选词、三击整行/段落；
-  - **XLSX 单元格与区域选择复制**：支持鼠标点选与拖拽框选（含合并单元格不动点闭包吸附、跨冻结边界四象限高亮裁剪、行列标头联动高亮），输出标准 TSV（自动跳过隐藏行列、按 RFC 4180 转义）；
+  - **XLSX / CSV / TSV 单元格与区域选择复制**：支持 `.xlsx` 以及 `.csv` / `.tsv`（自动识别 UTF-8 / UTF-16 / GB18030·GBK 编码与 `,` / `;` / `\t` 分隔符），支持鼠标点选与拖拽框选（含合并单元格不动点闭包吸附、跨冻结边界四象限高亮裁剪、行列标头联动高亮），输出标准 TSV（自动跳过隐藏行列、按 RFC 4180 转义）；
   - 全格式支持 `Cmd + C` 复制至系统剪贴板、`Cmd + A` 全选与右键快捷菜单。
 - **排版与复杂图形深度还原**：
   - **XLSX 冻结窗格、表头视口锁定与文本样式**：支持仅冻结行、仅冻结列与行列交叉冻结，单画布四象限裁剪绘制、跨冻结边界合并单元格、75% 视口占比保护、长表格滚动时外围行列标头与冻结分隔线视口锁定，以及单元格缩进（`indent`）与自动缩字（`shrinkToFit`）；
