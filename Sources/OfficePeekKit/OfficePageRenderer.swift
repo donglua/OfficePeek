@@ -55,6 +55,7 @@ public enum OfficePageRenderer {
         case .xlsx:
             return try renderXlsxSheet(
                 document: document,
+                filePath: filePath,
                 sheetIndex: pageNumber - 1,
                 maxSize: maxSize
             )
@@ -230,6 +231,7 @@ public enum OfficePageRenderer {
 
     private static func renderXlsxSheet(
         document: OfficeDocument,
+        filePath: String,
         sheetIndex: Int,
         maxSize: CGSize
     ) throws -> CGImage {
@@ -242,13 +244,25 @@ public enum OfficePageRenderer {
         let previewW = max(200, min(totalW > CGElementDrawer.sheetHeaderWidth ? totalW : 400, 800))
         let previewH = max(150, min(totalH > CGElementDrawer.sheetHeaderHeight ? totalH : 300, 600))
         let previewSize = CGSize(width: previewW, height: previewH)
+        let viewport = CGRect(origin: .zero, size: previewSize)
+
+        // 按视口收集可见的浮动图片并按总预算均摊解码，保证 PNG 导出与封面/主预览一致
+        let neededParts = CGElementDrawer.visibleSheetImageParts(sheet: sheet, viewport: viewport)
+        let images: [String: CGImage]
+        if neededParts.isEmpty {
+            images = [:]
+        } else {
+            let perImageBudget = max(200_000, 4_000_000 / max(1, neededParts.count))
+            images = loadImages(parts: neededParts, filePath: filePath, maxPixelBudget: perImageBudget)
+        }
 
         return try renderBitmap(logicalSize: previewSize, maxSize: maxSize) { ctx in
             CGElementDrawer.drawSpreadsheet(
                 in: ctx,
                 sheet: sheet,
                 styles: document.cellStyles,
-                viewport: CGRect(origin: .zero, size: previewSize)
+                viewport: viewport,
+                images: images
             )
         }
     }
