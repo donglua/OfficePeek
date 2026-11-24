@@ -19,9 +19,18 @@ struct PresentationView: View {
                 VStack {
                     Spacer()
                     PresentationHUDView(viewModel: viewModel)
+                        .onTapGesture {}
                         .padding(.bottom, 36)
                 }
                 .transition(.opacity)
+            }
+
+            if viewModel.session.isLaserEnabled,
+               viewModel.session.blankMode == .none,
+               let point = viewModel.laserPoint {
+                LaserDotView()
+                    .position(point)
+                    .allowsHitTesting(false)
             }
         }
         .background(Color.black)
@@ -41,12 +50,6 @@ struct PresentationView: View {
         ZStack {
             Color.black
             slideLayer
-
-            if viewModel.session.isLaserEnabled, let point = viewModel.laserPoint {
-                LaserDotView()
-                    .position(point)
-                    .allowsHitTesting(false)
-            }
 
             if !viewModel.session.jumpBuffer.isEmpty {
                 Text("跳转到第 \(viewModel.session.jumpBuffer) 页")
