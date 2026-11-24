@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Combine
 import UniformTypeIdentifiers
 import JZOffice
 import OfficePeekKit
@@ -13,6 +14,8 @@ public final class AppState: ObservableObject {
     @Published public var isSidebarVisible: Bool = true
     @Published public var showWarningsSheet: Bool = false
     @Published public var toastMessage: String?
+    @Published public private(set) var isPresenting: Bool = false
+    @Published public private(set) var canStartPresentation: Bool = false
 
     public let recentStore: RecentFilesStore
     public let previewController = OfficePreviewController()
@@ -21,9 +24,22 @@ public final class AppState: ObservableObject {
     internal private(set) var searchPrewarmTask: Task<Void, Never>?
     internal private(set) var prewarmedSearchPath: String?
     private var prewarmingSearchPath: String?
+    internal var presenterFactory: PresentationPresenterFactory = { request, onExit in
+        PresentationWindowController.present(request, onExit: onExit)
+    }
+    private var activePresenter: (any PresentationPresenting)?
+    private var cancellables: Set<AnyCancellable> = []
 
     public init(recentStore: RecentFilesStore? = nil) {
         self.recentStore = recentStore ?? RecentFilesStore()
+        previewController.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.refreshPresentationAvailability()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     public func openDocument(at url: URL) {
@@ -32,6 +48,7 @@ public final class AppState: ObservableObject {
             showToast("文件不存在：\(stdURL.lastPathComponent)")
             return
         }
+        endPresentation()
         cancelSearchPrewarm()
         previewController.dismissSearch()
         previewController.clearSelection()
@@ -43,6 +60,7 @@ public final class AppState: ObservableObject {
     }
 
     public func closeDocument() {
+        endPresentation()
         cancelSearchPrewarm()
         previewController.dismissSearch()
         previewController.clearSelection()
@@ -80,6 +98,69 @@ public final class AppState: ObservableObject {
         searchPrewarmTask = nil
         prewarmingSearchPath = nil
         prewarmedSearchPath = nil
+    }
+
+    // MARK: - 演示模式
+
+    /// 从当前页或首页开始全屏演示（仅 PPTX）
+    public func startPresentation(_ start: PresentationStart, on screen: NSScreen? = nil) {
+        guard !isPresenting,
+              let url = activeFileURL,
+              let slideCount = resolvePresentationSlideCount() else {
+            return
+        }
+        previewController.dismissSearch()
+        let request = PresentationLaunchRequest(
+            fileURL: url.standardizedFileURL,
+            slideCount: slideCount,
+            startSlide: start.startSlide(currentPage: previewController.currentPage, slideCount: slideCount),
+            screen: screen ?? NSScreen.main,
+            placeholders: pageThumbnailCache.pageImages
+        )
+        isPresenting = true
+        refreshPresentationAvailability()
+        activePresenter = presenterFactory(request) { [weak self] lastSlide in
+            self?.endPresentation(lastSlide: lastSlide)
+        }
+    }
+
+    /// 结束演示；`lastSlide` 非空时把阅读视图同步到该页
+    public func endPresentation(lastSlide: Int? = nil) {
+        guard isPresenting else { return }
+        let presenter = activePresenter
+        activePresenter = nil
+        isPresenting = false
+        presenter?.dismiss()
+        if let lastSlide {
+            previewController.jumpToPage(lastSlide)
+        }
+        refreshPresentationAvailability()
+    }
+
+    /// 解析当前文档可演示的幻灯片数：优先使用预览控制器已加载的元数据，未加载时轻量读取
+    internal func resolvePresentationSlideCount() -> Int? {
+        guard let url = activeFileURL else { return nil }
+        if let meta = previewController.metadata {
+            return meta.format == .pptx && meta.pageCount > 0 ? meta.pageCount : nil
+        }
+        guard url.pathExtension.lowercased() == "pptx",
+              let meta = try? OfficeMetadata.read(from: url),
+              meta.format == .pptx,
+              meta.pageCount > 0 else {
+            return nil
+        }
+        return meta.pageCount
+    }
+
+    private func refreshPresentationAvailability() {
+        let meta = previewController.metadata
+        let available = !isPresenting
+            && activeFileURL != nil
+            && meta?.format == .pptx
+            && (meta?.pageCount ?? 0) > 0
+        if available != canStartPresentation {
+            canStartPresentation = available
+        }
     }
 
     public func pickFileWithPanel() {
