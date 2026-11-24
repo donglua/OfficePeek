@@ -57,7 +57,7 @@ struct WelcomeView: View {
                 Text("OfficePeek")
                     .font(ThemeTypography.brandTitle)
 
-                Text("v0.7.0")
+                Text("v0.8.0")
                     .font(ThemeTypography.sidebarBadge)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 7)
