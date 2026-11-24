@@ -134,3 +134,114 @@ struct PresentationSessionTests {
         #expect(PresentationStart.currentSlide.startSlide(currentPage: 3, slideCount: 0) == 1)
     }
 }
+
+@Suite("PresentationKeyMap 键盘映射")
+struct PresentationKeyMapTests {
+
+    private func map(
+        _ keyCode: UInt16,
+        _ characters: String? = nil,
+        _ flags: NSEvent.ModifierFlags = []
+    ) -> PresentationCommand? {
+        PresentationKeyMap.command(
+            keyCode: keyCode,
+            charactersIgnoringModifiers: characters,
+            modifierFlags: flags
+        )
+    }
+
+    @Test("方向键/空格/翻页键/回车/Home/End/Esc 按虚拟键码映射")
+    func mapsSpecialKeys() {
+        #expect(map(124) == .next)
+        #expect(map(125) == .next)
+        #expect(map(49, " ") == .next)
+        #expect(map(121) == .next)
+        #expect(map(123) == .previous)
+        #expect(map(126) == .previous)
+        #expect(map(51) == .previous)
+        #expect(map(116) == .previous)
+        #expect(map(36, "\r") == .commitJump)
+        #expect(map(76) == .commitJump)
+        #expect(map(115) == .first)
+        #expect(map(119) == .last)
+        #expect(map(53) == .cancel)
+        #expect(map(124, nil, [.numericPad, .function]) == .next)
+    }
+
+    @Test("字母、标点与数字按字符映射且忽略大小写")
+    func mapsCharacters() {
+        #expect(map(45, "n") == .next)
+        #expect(map(35, "p") == .previous)
+        #expect(map(11, "b") == .toggleBlack)
+        #expect(map(11, "B", [.shift]) == .toggleBlack)
+        #expect(map(47, ".") == .toggleBlack)
+        #expect(map(13, "w") == .toggleWhite)
+        #expect(map(43, ",") == .toggleWhite)
+        #expect(map(37, "l") == .toggleLaser)
+        #expect(map(18, "1") == .digit(1))
+        #expect(map(29, "0") == .digit(0))
+        #expect(map(7, "x") == nil)
+        #expect(map(7, nil) == nil)
+    }
+
+    @Test("带 ⌘/⌃/⌥ 修饰时透传给系统")
+    func passesThroughModifiedKeys() {
+        #expect(map(124, nil, [.command]) == nil)
+        #expect(map(12, "q", [.command]) == nil)
+        #expect(map(11, "b", [.control]) == nil)
+        #expect(map(53, nil, [.option]) == nil)
+    }
+}
+
+@Suite("PresentationScrollAccumulator 滚动与滑动")
+struct PresentationScrollAccumulatorTests {
+
+    @Test("触控板同一手势累计超过阈值仅触发一次，结束后可再次触发")
+    func trackpadFiresOncePerGesture() {
+        var acc = PresentationScrollAccumulator()
+        let r1 = acc.consume(deltaX: 0, deltaY: -15, hasPreciseDeltas: true, phase: .began, momentumPhase: [], timestamp: 0)
+        #expect(r1 == nil)
+        let r2 = acc.consume(deltaX: 0, deltaY: -30, hasPreciseDeltas: true, phase: .changed, momentumPhase: [], timestamp: 0.02)
+        #expect(r2 == .next)
+        let r3 = acc.consume(deltaX: 0, deltaY: -80, hasPreciseDeltas: true, phase: .changed, momentumPhase: [], timestamp: 0.04)
+        #expect(r3 == nil)
+        let r4 = acc.consume(deltaX: 0, deltaY: 0, hasPreciseDeltas: true, phase: .ended, momentumPhase: [], timestamp: 0.06)
+        #expect(r4 == nil)
+        let r5 = acc.consume(deltaX: 0, deltaY: 50, hasPreciseDeltas: true, phase: .began, momentumPhase: [], timestamp: 0.5)
+        #expect(r5 == .previous)
+    }
+
+    @Test("惯性阶段全部忽略")
+    func ignoresMomentum() {
+        var acc = PresentationScrollAccumulator()
+        let r1 = acc.consume(deltaX: 0, deltaY: -120, hasPreciseDeltas: true, phase: [], momentumPhase: .changed, timestamp: 0)
+        #expect(r1 == nil)
+        let r2 = acc.consume(deltaX: 0, deltaY: -5, hasPreciseDeltas: false, phase: [], momentumPhase: .began, timestamp: 1)
+        #expect(r2 == nil)
+    }
+
+    @Test("横向位移占主导时按横轴判定方向")
+    func horizontalAxis() {
+        var acc = PresentationScrollAccumulator()
+        let r1 = acc.consume(deltaX: -50, deltaY: 10, hasPreciseDeltas: true, phase: .began, momentumPhase: [], timestamp: 0)
+        #expect(r1 == .next)
+        _ = acc.consume(deltaX: 0, deltaY: 0, hasPreciseDeltas: true, phase: .ended, momentumPhase: [], timestamp: 0.1)
+        let r2 = acc.consume(deltaX: 50, deltaY: -10, hasPreciseDeltas: true, phase: .began, momentumPhase: [], timestamp: 0.5)
+        #expect(r2 == .previous)
+    }
+
+    @Test("鼠标滚轮每格触发一次且 0.25s 内连续滚动合并")
+    func wheelCooldown() {
+        var acc = PresentationScrollAccumulator()
+        let r1 = acc.consume(deltaX: 0, deltaY: -1, hasPreciseDeltas: false, phase: [], momentumPhase: [], timestamp: 10.0)
+        #expect(r1 == .next)
+        let r2 = acc.consume(deltaX: 0, deltaY: -1, hasPreciseDeltas: false, phase: [], momentumPhase: [], timestamp: 10.1)
+        #expect(r2 == nil)
+        let r3 = acc.consume(deltaX: 0, deltaY: -1, hasPreciseDeltas: false, phase: [], momentumPhase: [], timestamp: 10.4)
+        #expect(r3 == .next)
+        let r4 = acc.consume(deltaX: 0, deltaY: 1, hasPreciseDeltas: false, phase: [], momentumPhase: [], timestamp: 11.0)
+        #expect(r4 == .previous)
+        let r5 = acc.consume(deltaX: 0, deltaY: 0, hasPreciseDeltas: false, phase: [], momentumPhase: [], timestamp: 12.0)
+        #expect(r5 == nil)
+    }
+}
