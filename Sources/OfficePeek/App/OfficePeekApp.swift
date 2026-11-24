@@ -50,6 +50,7 @@ struct OfficePeekApp: App {
                     appState.pickFileWithPanel()
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+                .disabled(appState.isPresenting)
 
                 Button("返回欢迎主页") {
                     appState.closeDocument()
@@ -63,12 +64,12 @@ struct OfficePeekApp: App {
                     appState.exportPDF()
                 }
                 .keyboardShortcut("e", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
 
                 Button("导出当前页为高清 PNG…") {
                     appState.exportCurrentPagePNG()
                 }
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
             }
 
             CommandGroup(after: .sidebar) {
@@ -78,7 +79,7 @@ struct OfficePeekApp: App {
                     }
                 }
                 .keyboardShortcut("\\", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
             }
 
             CommandMenu("查找与导航") {
@@ -86,25 +87,25 @@ struct OfficePeekApp: App {
                     appState.presentSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
 
                 Button("查找下一个") {
                     appState.previewController.findNext()
                 }
                 .keyboardShortcut("g", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented || appState.isPresenting)
 
                 Button("查找上一个") {
                     appState.previewController.findPrevious()
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
-                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented || appState.isPresenting)
 
                 Button("关闭查找栏") {
                     appState.previewController.dismissSearch()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
-                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented)
+                .disabled(appState.activeFileURL == nil || !appState.previewController.isSearchPresented || appState.isPresenting)
 
                 Divider()
 
@@ -112,13 +113,13 @@ struct OfficePeekApp: App {
                     appState.previewController.jumpToPage(max(1, appState.previewController.currentPage - 1))
                 }
                 .keyboardShortcut(.leftArrow, modifiers: [.command])
-                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage <= 1)
+                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage <= 1 || appState.isPresenting)
 
                 Button("下一页 / 工作表") {
                     appState.previewController.jumpToPage(min(appState.previewController.pageCount, appState.previewController.currentPage + 1))
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [.command])
-                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage >= appState.previewController.pageCount)
+                .disabled(appState.activeFileURL == nil || appState.previewController.currentPage >= appState.previewController.pageCount || appState.isPresenting)
             }
 
             CommandMenu("播放") {
@@ -140,19 +141,19 @@ struct OfficePeekApp: App {
                     appState.previewController.setZoom(appState.previewController.zoom + 0.25)
                 }
                 .keyboardShortcut("=", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
 
                 Button("缩小") {
                     appState.previewController.setZoom(appState.previewController.zoom - 0.25)
                 }
                 .keyboardShortcut("-", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
 
                 Button("实际大小 (100%)") {
                     appState.previewController.resetZoom()
                 }
                 .keyboardShortcut("0", modifiers: [.command])
-                .disabled(appState.activeFileURL == nil)
+                .disabled(appState.activeFileURL == nil || appState.isPresenting)
             }
 
             TextEditingCommands()
