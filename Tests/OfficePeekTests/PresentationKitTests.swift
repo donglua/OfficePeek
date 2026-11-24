@@ -245,3 +245,104 @@ struct PresentationScrollAccumulatorTests {
         #expect(r5 == nil)
     }
 }
+
+@Suite("PresentationSlideRenderer 屏幕级渲染与预取")
+struct PresentationSlideRendererTests {
+
+    private func makeTempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("officepeek-present-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func cornerRGB(of image: CGImage) throws -> (r: UInt8, g: UInt8, b: UInt8) {
+        let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: image.width * 4,
+            space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            throw NSError(domain: "PresentationTests", code: 1)
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let offset = (2 * image.width + 2) * 4
+        return (pixels[offset], pixels[offset + 1], pixels[offset + 2])
+    }
+
+    @Test("show 渲染当前页并预取前后页，尺寸匹配目标像素")
+    @MainActor
+    func rendersFocusAndNeighbors() async throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("deck.pptx")
+        try TestFixtures.writeMinimalPPTX(to: url, slides: [
+            (backgroundHex: "FF0000", title: "One"),
+            (backgroundHex: "00FF00", title: "Two"),
+            (backgroundHex: "0000FF", title: "Three")
+        ])
+
+        let renderer = PresentationSlideRenderer(fileURL: url, targetPixelSize: CGSize(width: 320, height: 180))
+        renderer.show(slide: 2)
+        await renderer.waitUntilIdle()
+
+        let keys = renderer.images.keys.sorted()
+        #expect(keys == [1, 2, 3])
+        #expect(renderer.focusSlide == 2)
+        #expect(renderer.loadError == nil)
+
+        let second = try #require(renderer.images[2])
+        #expect(second.width == 320)
+        #expect(second.height == 180)
+        let pixel = try cornerRGB(of: second)
+        #expect(pixel.g > 200)
+        #expect(pixel.r < 50)
+    }
+
+    @Test("跳到远端页时淘汰窗口外位图且不渲染越界页")
+    @MainActor
+    func evictsOutsideRetainWindow() async throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("five.pptx")
+        try TestFixtures.writeMinimalPPTX(to: url, slides: [
+            (backgroundHex: "FF0000", title: "1"),
+            (backgroundHex: "00FF00", title: "2"),
+            (backgroundHex: "0000FF", title: "3"),
+            (backgroundHex: "FFFF00", title: "4"),
+            (backgroundHex: "00FFFF", title: "5")
+        ])
+
+        let renderer = PresentationSlideRenderer(
+            fileURL: url,
+            targetPixelSize: CGSize(width: 160, height: 90),
+            retainRadius: 1
+        )
+        renderer.show(slide: 1)
+        await renderer.waitUntilIdle()
+        let firstKeys = renderer.images.keys.sorted()
+        #expect(firstKeys == [1, 2])
+
+        renderer.show(slide: 5)
+        await renderer.waitUntilIdle()
+        let secondKeys = renderer.images.keys.sorted()
+        #expect(secondKeys == [4, 5])
+    }
+
+    @Test("文档无法解析时给出 loadError")
+    @MainActor
+    func reportsLoadError() async {
+        let missing = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-\(UUID().uuidString).pptx")
+        let renderer = PresentationSlideRenderer(fileURL: missing, targetPixelSize: CGSize(width: 100, height: 100))
+        renderer.show(slide: 1)
+        await renderer.waitUntilIdle()
+        #expect(renderer.loadError != nil)
+        #expect(renderer.images.isEmpty)
+    }
+}
