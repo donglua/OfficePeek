@@ -70,7 +70,7 @@ final class PresentationViewModel: ObservableObject {
         }
         if session.blankMode != .none {
             hideHUD()
-        } else if slideChanged {
+        } else if slideChanged || command == .toggleLaser {
             revealHUD()
         }
     }

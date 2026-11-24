@@ -113,6 +113,20 @@ struct PresentationViewModelTests {
         #expect(cursor.hideUntilMovesCount == 1)
         vm.finish()
     }
+
+    @Test("非黑白屏时切换激光笔重新显示并刷新 HUD 计时")
+    @MainActor
+    func toggleLaserRevealsHUD() async throws {
+        let cursor = FakePresentationCursor()
+        let vm = makeViewModel(cursor: cursor, delay: .milliseconds(40))
+        vm.start()
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(!vm.isHUDVisible)
+
+        vm.handle(.toggleLaser)
+        #expect(vm.isHUDVisible)
+        vm.finish()
+    }
 }
 
 @MainActor
