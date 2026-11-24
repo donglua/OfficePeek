@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 import JZOffice
 import OfficePeekKit
@@ -80,6 +81,33 @@ struct DocumentReaderView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                if controller.metadata?.format == .pptx && controller.pageCount > 0 {
+                    Menu {
+                        Button("从头开始播放") {
+                            appState.startPresentation(.beginning)
+                        }
+                        Button("从当前幻灯片播放") {
+                            appState.startPresentation(.currentSlide)
+                        }
+                        if NSScreen.screens.count > 1 {
+                            Divider()
+                            Section("在指定显示器上播放") {
+                                ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { _, screen in
+                                    Button(screen.localizedName) {
+                                        appState.startPresentation(.currentSlide, on: screen)
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("播放", systemImage: "play.fill")
+                    } primaryAction: {
+                        appState.startPresentation(.currentSlide)
+                    }
+                    .disabled(appState.isPresenting)
+                    .help("播放幻灯片（⌘↩ 从当前页，⌘⇧↩ 从头）")
+                }
+
                 if controller.pageCount > 1 {
                     ControlGroup {
                         Button {

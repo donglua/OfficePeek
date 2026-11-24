@@ -121,6 +121,20 @@ struct OfficePeekApp: App {
                 .disabled(appState.activeFileURL == nil || appState.previewController.currentPage >= appState.previewController.pageCount)
             }
 
+            CommandMenu("播放") {
+                Button("从头开始播放") {
+                    appState.startPresentation(.beginning)
+                }
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
+                .disabled(!appState.canStartPresentation)
+
+                Button("从当前幻灯片播放") {
+                    appState.startPresentation(.currentSlide)
+                }
+                .keyboardShortcut(.return, modifiers: [.command])
+                .disabled(!appState.canStartPresentation)
+            }
+
             CommandMenu("视图") {
                 Button("放大") {
                     appState.previewController.setZoom(appState.previewController.zoom + 0.25)
